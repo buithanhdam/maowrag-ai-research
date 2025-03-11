@@ -26,7 +26,7 @@ class Config:
     GEMINI_CONFIG = LLMConfig(
         api_key=os.environ.get('GOOGLE_API_KEY'),
         model_name="Gemini",
-        model_id="models/gemini-1.5-flash",
+        model_id="models/gemini-2.0-flash",
         temperature=0.8,
         max_tokens = 2048,
         system_prompt=LLM_SYSTEM_PROMPT

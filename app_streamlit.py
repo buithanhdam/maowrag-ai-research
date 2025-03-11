@@ -1,7 +1,9 @@
 import os
 import streamlit as st
 import requests
-from typing import List, Dict
+import json
+from typing import List, Dict, Iterator, Optional
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -37,6 +39,36 @@ def get_agent_response(prompt: str) -> str:
         st.error(f"Error communicating with agent: {e}")
         return "Sorry, there was an error processing your request."
 
+def stream_agent_response(prompt: str) -> Iterator[str]:
+    """
+    Stream response from agent API
+    
+    Args:
+        prompt (str): User input query
+    
+    Returns:
+        Iterator[str]: Stream of response chunks
+    """
+    try:
+        # Use the environment variable for the API URL
+        full_url = f"{API_URL}/agent/stream"
+        
+        # Make a streaming request to the server
+        with requests.post(full_url, json={"query": prompt}, stream=True) as response:
+            response.raise_for_status()
+            
+            # Process server-sent events
+            for line in response.iter_lines():
+                if line:
+                    # SSE format: "data: {chunk}"
+                    chunk = line.decode('utf-8')
+                    if chunk == "[DONE]":
+                        break
+                    yield chunk
+    except requests.RequestException as e:
+        st.error(f"Error streaming from agent: {e}")
+        yield "Sorry, there was an error processing your request."
+
 def reset_chat_history():
     """
     Send request to reset chat history via API
@@ -60,7 +92,7 @@ def main():
     # Initialize session state
     initialize_session_state()
 
-    # Display chat messages
+    # Display chat messages from history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -72,25 +104,37 @@ def main():
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Get agent response
+        # Get agent response with streaming
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response = get_agent_response(prompt)
-                st.markdown(response)
-                add_message("assistant", response)
+            response_placeholder = st.empty()
+            full_response = ""
+            
+            # Stream the response
+            for chunk in stream_agent_response(prompt):
+                full_response += chunk
+                response_placeholder.markdown(full_response + "▌")
+                time.sleep(0.01)  # Small delay for smoother animation
+            
+            # Update with the final response (without cursor)
+            response_placeholder.markdown(full_response)
+            
+            # Add completed response to chat history
+            add_message("assistant", full_response)
 
-    # Sidebar with agent information and reset functionality
+    # Sidebar with agent information and settings
     with st.sidebar:
         st.subheader("Available Agents")
         st.info("📝 Reflection Assistant\n\nHelps with information based on LLM")
         st.info("📋 Planning Assistant\n\nAssists with project planning, task breakdown, and weather information")
 
-        # Add a more prominent reset button with confirmation
-        if st.button("🔄 Reset Entire Chat", type="primary"):
-            # Add a confirmation step
-            if st.checkbox("Are you sure you want to reset the chat?", key="confirm_reset"):
-                reset_chat_history()
-                st.rerun()
+        # Use expander for settings to keep the UI clean
+        with st.expander("⚙️ Chat Settings"):
+            # Add a reset button with confirmation
+            if st.button("🔄 Reset Entire Chat", type="primary"):
+                reset_confirmation = st.checkbox("Are you sure you want to reset the chat?", key="confirm_reset")
+                if reset_confirmation:
+                    reset_chat_history()
+                    st.rerun()
 
 if __name__ == "__main__":
     main()

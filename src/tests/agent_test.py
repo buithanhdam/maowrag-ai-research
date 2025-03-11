@@ -4,7 +4,7 @@ from src.agents import (ReflectionAgent,
                         AgentOptions,
                         ManagerAgent)
 from src.tools.tool_manager import create_function_tool
-from src.agents.llm import GeminiLLM
+from src.agents.llm import UnifiedLLM
 
 def get_weather(location: str, unit: str = "celsius") -> dict:
         """Get current weather for a location
@@ -22,7 +22,7 @@ def get_weather(location: str, unit: str = "celsius") -> dict:
         }
 
 async def test_reflection_async():
-    async with ReflectionAgent(llm= GeminiLLM()) as agent:
+    async with ReflectionAgent(llm= UnifiedLLM(model_name="gemini")) as agent:
         result = await agent.run(
             user_msg="leonel messi most successful achievement in his career",
             verbose=1
@@ -36,7 +36,7 @@ async def test_planning_async():
         name="get_weather",
         description="Get current weather information for a location"
     )
-    async with PlanningAgent(llm= GeminiLLM(),tools=[weather_tool]) as agent:
+    async with PlanningAgent(llm= UnifiedLLM(model_name="gemini"),tools=[weather_tool]) as agent:
         result = await agent.run(
             task="What's the weather in Hanoi?",
             verbose=True
@@ -44,7 +44,7 @@ async def test_planning_async():
         print("Planning agent commplete: ",result)
 
 async def test_manager_agent():
-    llm= GeminiLLM()
+    llm= UnifiedLLM(model_name="gemini")
     
     reflection_agent = ReflectionAgent(llm, AgentOptions(
         name="Reflection Assistant",

@@ -1,48 +1,10 @@
-# Multi-Agent
-![picture](https://raw.githubusercontent.com/awslabs/multi-agent-orchestrator/main/img/flow.jpg)
+# Research-Agent-LLM-Everyday
 
 ## Introduction
 
-This repository contains an implementation of agentic patterns such as **Planning (ReAct flow)**, **Reflection**, and **Multi-Agent** workflows. It showcases advanced agent orchestration with APIs and tools.
+This repository contains an implementation of agentic patterns such as **Planning (ReAct flow)**, **Reflection**, **CodeAtc Agent**, **Deep Research Agent**, etc. workflows. It showcases advanced agent orchestration with APIs and tools.
 
-- Follow this repo to learn more about multi-agent patterns: [agentic_patterns](https://github.com/neural-maze/agentic_patterns/)
-- Follow this repo to learn more about multi-agent orchestrator: [multi-agent-orchestrator](https://github.com/awslabs/multi-agent-orchestrator)
-
----
-
-## Project Structure
-
-```plaintext
-multi-agent/
-│
-├── api/                     # API logic
-│   ├── routers/             # API routers
-│   └── services/            # Service logic
-│       └── agent.py         # Main agent services
-│
-├── docker/                  # Docker setup
-│   ├── Dockerfile.backend   # Backend Dockerfile
-│   └── Dockerfile.frontend  # Frontend Dockerfile
-│
-├── src/                     # Source code
-│   ├── agents/              # Agent-specific implementations
-│   └── tests/               # Test files
-│       ├── agent_test.py    # Tests for agents
-│       └── llm_test.py      # Tests for LLM functions
-│
-├── tools/                   # Utility tools
-├── utils/                   # Configuration and helper functions
-│   ├── config.py            # Configuration settings
-│   └── prompt.py            # Prompt definitions
-│
-├── venv/                    # Virtual environment
-├── app_fastapi.py           # FastAPI app
-├── app_streamlit.py         # Streamlit app for UI
-├── docker-compose.yaml      # Docker Compose setup
-├── .env.example             # Environment variable template
-├── requirements.txt         # Python dependencies
-└── README.md                # Project documentation
-```
+- Follow this repo to learn more about **Planning (ReAct flow)**, **Reflection** or **multi-agent** patterns: [agentic_patterns](https://github.com/neural-maze/agentic_patterns/)
 
 ---
 
@@ -51,8 +13,8 @@ multi-agent/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/buithanhdam/multi-agent.git
-cd multi-agent
+git clone https://github.com/buithanhdam/research-agent-llm-everyday.git
+cd research-agent-llm-everyday
 ```
 
 ### 2. Create and activate a virtual environment (Optional)

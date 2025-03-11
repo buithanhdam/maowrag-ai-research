@@ -1,47 +1,24 @@
 import json
-import logging
-from typing import List,Any, Optional
+from typing import AsyncGenerator, Generator, List,Any, Optional
 from colorama import Fore
 from llama_index.core.tools import FunctionTool
 from llama_index.core.llms import ChatMessage
 from src.agents.llm import BaseLLM
 from src.agents.utils import PlanStep, ExecutionPlan, clean_json_response
 from src.agents.base import BaseAgent, AgentOptions
-logger = logging.getLogger(__name__)
+import asyncio
+from src.logger import get_formatted_logger
+
+logger = get_formatted_logger(__name__)
 
 
 class PlanningAgent(BaseAgent):
     """Agent that creates and executes plans using available tools"""
     
-    def __init__(self, llm: BaseLLM, options: AgentOptions, tools: List[FunctionTool] = []):
-        super().__init__(llm, options)
-        self.tools = tools
-        self.tools_dict = {tool.metadata.name: tool for tool in tools}
-        
-    def _create_system_message(self, prompt: str) -> ChatMessage:
-        return ChatMessage(role="system", content=prompt)
-        
-    def _format_tool_signatures(self) -> str:
-        """Format all tool signatures into a string format LLM can understand"""
-        if not self.tools:
-            return "No tools are available. Respond based on your general knowledge only."
-            
-        tool_descriptions = []
-        for tool in self.tools:
-            metadata = tool.metadata
-            parameters = metadata.get_parameters_dict()
-            
-            tool_descriptions.append(
-                f"""
-                Function: {metadata.name}
-                Description: {metadata.description}
-                Parameters: {json.dumps(parameters, indent=2)}
-                """
-            )
-        
-        return "\n".join(tool_descriptions)
+    def __init__(self, llm: BaseLLM, options: AgentOptions, system_prompt:str = "", tools: List[FunctionTool] = []):
+        super().__init__(llm, options, system_prompt, tools)
 
-    async def _get_initial_plan(self, task: str) -> ExecutionPlan:
+    async def _get_initial_plan(self, task: str, verbose:bool) -> ExecutionPlan:
         """Generate initial execution plan with focus on available tools"""
         prompt = f"""
         You are a planning assistant with access to specific tools. Create a focused plan using ONLY the tools listed below.
@@ -64,8 +41,7 @@ class PlanningAgent(BaseAgent):
                 {{
                     "description": "step description",
                     "requires_tool": true/false,
-                    "tool_name": "tool_name or null",
-                    "is_required": true/false
+                    "tool_name": "tool_name or null"
                 }},
                 ...
             ]
@@ -73,6 +49,8 @@ class PlanningAgent(BaseAgent):
         """
         
         try:
+            if verbose:
+                logger.info("Generating initial plan...")
             response = await self.llm.achat(query=prompt)
             response = clean_json_response(response)
             plan_data = json.loads(response)
@@ -89,55 +67,18 @@ class PlanningAgent(BaseAgent):
                 plan.add_step(PlanStep(
                     description=step_data['description'],
                     tool_name=step_data.get('tool_name'),
-                    requires_tool=step_data.get('is_required', True)
+                    requires_tool=step_data.get('requires_tool', True)
                 ))
-            
+            if verbose:
+                logger.info(f"Initial plan generated successfully with: {len(plan.steps)} step.")
             return plan
             
         except Exception as e:
-            logger.error(f"Error generating initial plan: {str(e)}")
-            raise
+            if verbose:
+                logger.error(f"Error generating initial plan: {str(e)}")
+            raise e
 
-    async def _execute_tool(self, step: PlanStep) -> Optional[Any]:
-        """Execute a tool with better error handling"""
-        if not step.requires_tool or not step.tool_name:
-            return None
-            
-        tool = self.tools_dict.get(step.tool_name)
-        if not tool:
-            return None
-            
-        prompt = f"""
-        Generate parameters to call this tool:
-        Step: {step.description}
-        Tool: {step.tool_name}
-        
-        Tool specification:
-        {json.dumps(tool.metadata.get_parameters_dict(), indent=2)}
-        
-        Response format:
-        {{
-            "arguments": {{
-                // parameter names and values matching the specification exactly
-            }}
-        }}
-        """
-        
-        try:
-            response = await self.llm.achat(query=prompt)
-            response = clean_json_response(response)
-            params = json.loads(response)
-            
-            result = await tool.acall(**params['arguments'])
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error executing tool {step.tool_name}: {str(e)}")
-            if step.is_required:
-                raise
-            return None
-
-    async def _generate_summary(self, task: str, results: List[Any]) -> str:
+    async def _generate_summary(self, task: str, results: List[Any], verbose:bool) -> str:
         """Generate a coherent summary of the results"""
         prompt = f"""
         Create a clear and concise summary based on the following:
@@ -152,28 +93,38 @@ class PlanningAgent(BaseAgent):
         4. If the information seems insufficient, acknowledge that
         """
         
+        if verbose:
+            logger.info("Generating summary...")
+        
+        summary_prompt = self.system_prompt + "\n" + prompt
+        
         try:
-            return await self.llm.achat(query=prompt)
+            result = await self.llm.achat(query=summary_prompt)
+            if verbose:
+                logger.info(f"Summary generated successfully with final result: {result}.")
+            return result
         except Exception as e:
-            logger.error(f"Error generating summary: {str(e)}")
-            raise
+            if verbose:
+                logger.error(f"Error generating summary: {str(e)}")
+            raise e
 
     async def run(
         self,
         query: str,
         max_steps: int = 3,
-        verbose: bool = False
+        verbose: bool = False,
+        chat_history: List[ChatMessage] = []
     ) -> str:
         """Execute the plan and generate response"""
         if verbose:
-            print(Fore.BLUE + f"\nProcessing query: {query}")
+            logger.info(f"\nProcessing query: {query}")
         
         try:
             # Generate plan
-            plan = await self._get_initial_plan(query)
+            plan = await self._get_initial_plan(query,verbose)
             
             if verbose:
-                print(Fore.GREEN + "\nExecuting plan:")
+                logger.info("\nExecuting plan...")
             
             # Execute all steps and collect results
             results = []
@@ -182,11 +133,13 @@ class PlanningAgent(BaseAgent):
                     break
                     
                 if verbose:
-                    print(Fore.YELLOW + f"\nStep {step_num}: {step.description}")
+                    logger.info(f"\nStep {step_num}/{len(plan.steps)}: {step.description}")
                 
                 try:
                     if step.requires_tool:
-                        result = await self._execute_tool(step)
+                        result = await self._execute_tool(step.tool_name, step.description,step.requires_tool)
+                        if verbose:
+                            logger.info(f"Tool {step.tool_name} executed successfully with arguments: {result}")
                         if result is not None:
                             results.append(result)
                     else:
@@ -195,123 +148,216 @@ class PlanningAgent(BaseAgent):
                         results.append(result)
                         
                 except Exception as e:
-                    logger.error(f"Error in step {step_num}: {str(e)}")
-                    if step.is_required:
+                    if verbose:
+                        logger.error(f"Error in step {step_num}: {str(e)}")
+                    if step.requires_tool:
+                        if verbose:
+                            logger.error(f"Error executing tool {step.tool_name}: {str(e)}")
                         raise
+                if verbose:
+                    logger.info(f"Step {step_num}/{len(plan.steps)} completed.")
                         
             # Generate final summary
-            return await self._generate_summary(query, results)
+            return await self._generate_summary(query, results, verbose)
             
         except Exception as e:
-            logger.error(f"Error in run: {str(e)}")
-            return f"I apologize, but I encountered an error while processing your request: {str(e)}"
+            if verbose:
+                logger.error(f"Error in run: {str(e)}")
+            raise f"I apologize, but I encountered an error while processing your request: {str(e)}"
 
-    async def _reflect_and_adjust(self, plan: ExecutionPlan, last_result: Any) -> bool:
-        reflection_prompt = f"""
-        Reflect on the current execution state and determine if the plan needs adjustment.
-        Only respond with a valid JSON object containing your analysis and decisions.
+    # New methods for chat, stream, achat, and astream implementation
+    async def achat(
+        self,
+        query: str,
+        verbose: bool = False,
+        chat_history: List[ChatMessage] = [],
+        *args,
+        **kwargs
+    ) -> str:
+        # Get additional parameters or use defaults
+        max_steps = kwargs.get("max_steps", 3)
         
-        Current progress: {plan.get_progress()}
-        Last result: {last_result}
-        Remaining steps: {[step.description for step in plan.steps[plan.current_step + 1:]]}
-        
-        Available tools: {list(self.tools_dict.keys())}
-        
-        Respond with a JSON object in this exact format:
-        {{
-            "decision": "continue",
-            "reasoning": "brief explanation",
-            "modifications": []
-        }}
-        
-        OR if modifications are needed:
-        {{
-            "decision": "modify",
-            "reasoning": "brief explanation",
-            "modifications": [
-                {{
-                    "type": "add|modify|remove",
-                    "step_index": null,
-                    "new_description": "step description",
-                    "requires_tool": false,
-                    "tool_name": null
-                }}
-            ]
-        }}
-        Remove the ```json and ```
-        """
+        if self.callbacks:
+            self.callbacks.on_agent_start(self.name)
         
         try:
-            response = await self.llm.achat(query=reflection_prompt)
-            cleaned_response = clean_json_response(response)
+            # Run the planning and execution flow
+            result = await self.run(
+                query=query,
+                max_steps=max_steps,
+                verbose=verbose,
+                chat_history=chat_history
+            )
             
-            try:
-                reflection_data = json.loads(cleaned_response)
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON parsing error: {str(e)}\nResponse: {cleaned_response}")
-                return False
+            return result
+        
+        finally:
+            if self.callbacks:
+                self.callbacks.on_agent_end(self.name)
+
+    def chat(
+        self,
+        query: str,
+        verbose: bool = False,
+        chat_history: List[ChatMessage] = [],
+        *args,
+        **kwargs
+    ) -> str:
+        # Create an event loop if one doesn't exist
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # Run the async chat method in the event loop
+        return loop.run_until_complete(
+            self.achat(
+                query=query,
+                verbose=verbose,
+                chat_history=chat_history,
+                *args,
+                **kwargs
+            )
+        )
+
+    async def _stream_plan_execution(
+        self,
+        query: str,
+        max_steps: int,
+        verbose: bool,
+        chat_history: List[ChatMessage]
+    ) -> AsyncGenerator[str, None]:
+        """Stream the plan execution process with status updates"""
+        try:
+            # Start with planning notification
+            yield "Planning your request...\n"
+            
+            # Generate plan
+            plan = await self._get_initial_plan(query, verbose)
+            
+            yield f"Created plan with {len(plan.steps)} steps.\n"
+            
+            # Execute all steps and collect results
+            results = []
+            for step_num, step in enumerate(plan.steps, 1):
+                if step_num > max_steps:
+                    yield "\nReached maximum number of steps. Finalizing results...\n"
+                    break
                 
-            if reflection_data.get("decision") == "continue":
-                return False
+                # Stream step information
+                yield f"\nExecuting step {step_num}: {step.description}\n"
                 
-            if reflection_data.get("decision") == "modify":
-                modifications = reflection_data.get("modifications", [])
-                plan_modified = False
-                
-                for mod in modifications:
-                    try:
-                        if mod["type"] == "add":
-                            # Validate tool name if step requires tool
-                            if mod.get("requires_tool", False):
-                                tool_name = mod.get("tool_name")
-                                if not tool_name or tool_name not in self.tools_dict:
-                                    logger.warning(f"Skipping step with invalid tool: {tool_name}")
-                                    continue
-                                    
-                            new_step = PlanStep(
-                                description=mod["new_description"],
-                                requires_tool=mod.get("requires_tool", False),
-                                tool_name=mod.get("tool_name")
-                            )
-                            plan.add_step(new_step)
-                            plan_modified = True
-                            
-                        elif mod["type"] == "modify":
-                            step_index = mod.get("step_index")
-                            if step_index is not None and 0 <= step_index < len(plan.steps):
-                                if mod.get("requires_tool", False):
-                                    tool_name = mod.get("tool_name")
-                                    if not tool_name or tool_name not in self.tools_dict:
-                                        logger.warning(f"Skipping modification with invalid tool: {tool_name}")
-                                        continue
-                                        
-                                plan.steps[step_index] = PlanStep(
-                                    description=mod["new_description"],
-                                    requires_tool=mod.get("requires_tool", False),
-                                    tool_name=mod.get("tool_name")
-                                )
-                                plan_modified = True
-                                
-                        elif mod["type"] == "remove":
-                            step_index = mod.get("step_index")
-                            if step_index is not None and 0 <= step_index < len(plan.steps):
-                                plan.steps.pop(step_index)
-                                plan_modified = True
-                                
-                    except KeyError as e:
-                        logger.error(f"Missing required field in modification: {str(e)}")
-                        continue
+                try:
+                    if step.requires_tool:
+                        yield f"Using tool: {step.tool_name}\n"
+                        result = await self._execute_tool(step.tool_name, step.description, step.requires_tool)
+                        if result is not None:
+                            yield "Tool execution complete.\n"
+                            results.append(result)
+                    else:
+                        yield "Processing with general knowledge...\n"
+                        result = await self.llm.achat(query=step.description)
+                        results.append(result)
                         
-                return plan_modified
+                except Exception as e:
+                    error_msg = f"Error in step {step_num}: {str(e)}\n"
+                    yield error_msg
+                    logger.error(error_msg)
+                    if step.requires_tool:
+                        raise
+            
+            # Generate and stream final summary
+            yield "\nGenerating final response based on collected information...\n\n"
+            
+                # Fallback if streaming is not available
+            summary = await self._generate_summary(query, results, verbose)
+            # Simulate streaming by yielding chunks
+            chunk_size = 15
+            for i in range(0, len(summary), chunk_size):
+                yield summary[i:i+chunk_size]
+                await asyncio.sleep(0.01)
                 
         except Exception as e:
-            logger.error(f"Error in reflection and adjustment: {str(e)}")
-            return False
-            
-        return False
-    async def __aenter__(self):
-        return self
+            error_msg = f"Error during plan execution: {str(e)}"
+            logger.error(error_msg)
+            yield f"\n{error_msg}\n"
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        # Cleanup code if needed
-        pass
+    async def astream_chat(
+        self,
+        query: str,
+        verbose: bool = False,
+        chat_history: Optional[List[ChatMessage]] = None,
+        *args,
+        **kwargs
+    ) -> AsyncGenerator[str, None]:
+        # Get additional parameters
+        max_steps = kwargs.get("max_steps", 3)
+        chat_history = chat_history or []
+        detailed_stream = kwargs.get("detailed_stream", False)
+        if self.callbacks:
+            self.callbacks.on_agent_start(self.name)
+        
+        try:
+            # If detailed_stream is True, show the entire planning process
+            if detailed_stream:
+                async for token in self._stream_plan_execution(
+                    query=query,
+                    max_steps=max_steps,
+                    verbose=verbose,
+                    chat_history=chat_history
+                ):
+                    yield token
+            else:
+                # Otherwise, just run the normal flow and stream the final result
+                result = await self.run(
+                    query=query,
+                    max_steps=max_steps,
+                    verbose=verbose,
+                    chat_history=chat_history
+                )
+                
+                # Stream the final result in chunks to simulate streaming
+                chunk_size = 5
+                for i in range(0, len(result), chunk_size):
+                    yield result[i:i+chunk_size]
+                    await asyncio.sleep(0.01)
+        
+        finally:
+            if self.callbacks:
+                self.callbacks.on_agent_end(self.name)
+
+    def stream_chat(
+        self,
+        query: str,
+        verbose: bool = False,
+        chat_history: Optional[List[ChatMessage]] = None,
+        *args,
+        **kwargs
+    ) -> Generator[str, None, None]:
+        # Create an event loop if one doesn't exist
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # Get the async generator
+        async_gen = self.astream_chat(
+            query=query,
+            verbose=verbose,
+            chat_history=chat_history,
+            *args,
+            **kwargs
+        )
+        
+        # Helper function to convert async generator to sync generator
+        def sync_generator():
+            agen = async_gen.__aiter__()
+            while True:
+                try:
+                    yield loop.run_until_complete(agen.__anext__())
+                except StopAsyncIteration:
+                    break
+        
+        return sync_generator()
