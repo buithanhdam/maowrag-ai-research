@@ -9,3 +9,5 @@ fastapi==0.112.2
 colorama==0.4.6
 streamlit==1.39.0
 tavily-python==0.5.1
+uvicorn
+geopy==2.4.1

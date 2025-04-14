@@ -18,12 +18,14 @@ class PlanningAgent(BaseAgent):
     def __init__(self, llm: BaseLLM, options: AgentOptions, system_prompt:str = "", tools: List[FunctionTool] = []):
         super().__init__(llm, options, system_prompt, tools)
 
-    async def _get_initial_plan(self, task: str, verbose:bool) -> ExecutionPlan:
+    async def _get_initial_plan(self, task: str, verbose:bool, chat_history: List[ChatMessage] = []) -> ExecutionPlan:
         """Generate initial execution plan with focus on available tools"""
         prompt = f"""
         You are a planning assistant with access to specific tools. Create a focused plan using ONLY the tools listed below.
         
         Task to accomplish: {task}
+        
+        Chat history: {str(chat_history)}
         
         Available tools and specifications:
         {self._format_tool_signatures()}
@@ -78,12 +80,13 @@ class PlanningAgent(BaseAgent):
                 logger.error(f"Error generating initial plan: {str(e)}")
             raise e
 
-    async def _generate_summary(self, task: str, results: List[Any], verbose:bool) -> str:
+    async def _generate_summary(self, task: str, results: List[Any], verbose:bool, chat_history: List[ChatMessage] = []) -> str:
         """Generate a coherent summary of the results"""
         prompt = f"""
         Create a clear and concise summary based on the following:
         
         Original task: {task}
+        Chat history: {str(chat_history)}
         Results from execution: {results}
         
         Rules:
@@ -121,7 +124,7 @@ class PlanningAgent(BaseAgent):
         
         try:
             # Generate plan
-            plan = await self._get_initial_plan(query,verbose)
+            plan = await self._get_initial_plan(query,verbose, chat_history)
             
             if verbose:
                 logger.info("\nExecuting plan...")
@@ -158,7 +161,7 @@ class PlanningAgent(BaseAgent):
                     logger.info(f"Step {step_num}/{len(plan.steps)} completed.")
                         
             # Generate final summary
-            return await self._generate_summary(query, results, verbose)
+            return await self._generate_summary(query, results, verbose, chat_history)
             
         except Exception as e:
             if verbose:
