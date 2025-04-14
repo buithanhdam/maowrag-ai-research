@@ -1,36 +1,74 @@
-# Research-Agent-LLM-Everyday
+# Research-Ai-LLM-Everyday
 
-## Introduction
+## 🧠 Introduction
 
-This repository contains an implementation of agentic patterns such as **Planning (ReAct flow)**, **Reflection**, **CodeAtc Agent**, **Deep Research Agent**, etc. workflows. It showcases advanced agent orchestration with APIs and tools.
+This repository is dedicated to the **daily research and practical application of AI technologies**, especially those revolving around **Large Language Models (LLMs)**, **Retrieval-Augmented Generation (RAG)**, and **Multi-Agent Systems**.
 
-- Follow this repo to learn more about **Planning (ReAct flow)**, **Reflection** or **multi-agent** patterns: [agentic_patterns](https://github.com/neural-maze/agentic_patterns/)
+It aims to serve as a **personal lab for rapid experimentation and learning**, offering a collection of tools, agents, and patterns useful for both research and real-world applications.
+
+### 🔍 Key Projects and Technologies
+
+- **RAG Techniques**:  
+  Leverage advanced multi-agent RAG systems for document search, knowledge retrieval, and reasoning:  
+  👉 [RAG App with Multi-Agent](https://github.com/buithanhdam/rag-app-agent-llm)
+
+- **Multi-Agent Orchestration**:  
+  Explore powerful workflows with **Planning (ReAct flow)**, **Reflection**, **Tool Use**, and custom agents like:
+  👉 [Multi-Agent Orchestrator](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
+
+- **Meeting Note Agent**:  
+  Summarizes and organizes meeting discussions intelligently:  
+  👉 [Meeting Note Tool](https://github.com/buithanhdam/meeting-note-tool)
+
+- **Resume Builder (LLM-based)**:  
+  Automate and enhance resume generation using AI:  
+  👉 [Resume AI Builder](https://github.com/buithanhdam/resume_ai_builder)
+
+- **Learning Agentic Patterns**:  
+  Includes references to core building blocks of agent design like:
+  - **Planning**
+  - **Reflection**
+  👉 [Agentic Patterns](https://github.com/neural-maze/agentic_patterns/)
 
 ---
 
-## Installation
+## 💡 Project Vision & Future Roadmap
+
+This repository aims to stay at the cutting edge of:
+- `CodeAtc Agent` – intelligent code generation/execution
+- `Deep Research Agent` – auto web search, context synthesis
+- 🤖 **Autonomous Multi-Agent Systems**  
+- 🧩 **Agentic Design Patterns: Planning, Reflection, Memory, Tool Use**
+- 🔍 **Deep Research Agents** – self-guided, multi-step web and document understanding
+- 🛠️ **LLM-Powered Developer Tools** – such as code assistants and document builders
+
+New experiments, integrations, and agent workflows will be continuously added to support the evolving landscape of **AI-first application development**.
+
+---
+
+## ⚙️ Installation
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/buithanhdam/research-agent-llm-everyday.git
-cd research-agent-llm-everyday
+git clone https://github.com/buithanhdam/research-ai-llm-everyday.git
+cd research-ai-llm-everyday
 ```
 
-### 2. Create and activate a virtual environment (Optional)
+### 2. (Optional) Create a virtual environment
 
-- **For Unix/macOS:**
+- **On Unix/macOS:**
   ```bash
   python3 -m venv venv
   source venv/bin/activate
   ```
-- **For Windows:**
+- **On Windows:**
   ```bash
   python -m venv venv
   .\venv\Scripts\activate
   ```
 
-### 3. Install dependencies
+### 3. Install required dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -38,17 +76,17 @@ pip install -r requirements.txt
 
 ---
 
-## Setup Environment Variables
+## 🔐 Environment Setup
 
-Copy the `.env.example` file to a new `.env` file and update the API keys:
+Create a `.env` file by copying the example file:
 
 ```bash
 cp .env.example .env
 ```
 
-Add the following keys:
+Add your API keys:
 
-```plaintext
+```env
 GOOGLE_API_KEY=your_google_api_key
 OPENAI_API_KEY=your_openai_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
@@ -56,50 +94,47 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 
 ---
 
-## Testing
+## ✅ Running Tests
 
-- Run the test suite using `pytest`:
+Run unit tests using `pytest`:
 
 ```bash
 pytest src/tests/
 ```
 
-- Or if you dont want to use `pytest` then run `python` cmd:
+Or run individual test files directly:
 
 ```bash
 python3 src/tests/llm_test.py
-```
-
-```bash
 python3 src/tests/agent_test.py
 ```
 
 ---
 
-## Running the Application
+## 🚀 Running the Application
 
-### 1. Run FastAPI Backend
+### 1. Start the FastAPI Backend
 
 ```bash
 uvicorn app_fastapi:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-- Access the API at: `http://127.0.0.1:8000`
+- API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### 2. Run Streamlit Frontend
+### 2. Start the Streamlit Frontend
 
 ```bash
 streamlit run app_streamlit.py --server.port=8501 --server.address=0.0.0.0
 ```
 
-- Access the frontend UI at: `http://localhost:8501`
+- Access the UI: [http://localhost:8501](http://localhost:8501)
 
 ---
 
-## Run with Docker
+## 🐳 Run with Docker
 
 ### 1. Build Docker Images
-- If you dont have `docker-compose` use `docker compose` instead
+
 ```bash
 docker-compose build
 ```
@@ -110,12 +145,10 @@ docker-compose build
 docker-compose up
 ```
 
-- The backend will be available at `http://localhost:8000`.
-- The frontend will be available at `http://localhost:8501`.
+- FastAPI backend: [http://localhost:8000](http://localhost:8000)  
+- Streamlit UI: [http://localhost:8501](http://localhost:8501)
 
-### 3. Stop Docker Containers
-
-To stop the running containers, press `Ctrl+C` or run:
+### 3. Stop Containers
 
 ```bash
 docker-compose down
@@ -123,19 +156,20 @@ docker-compose down
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-Feel free to open an issue or submit a pull request to improve this project.
+Have ideas or improvements?  
+Feel free to fork the repo, create issues, or submit a pull request.
 
 ---
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License.
 
 ---
 
-## References
+## 🔗 References
 
-- [Agentic Patterns Repo](https://github.com/neural-maze/agentic_patterns/)
-- [Multi Agent Orchestrator](https://github.com/awslabs/multi-agent-orchestrator)
+- [Agentic Patterns (Neural Maze)](https://github.com/neural-maze/agentic_patterns/)
+- [Multi-Agent Orchestrator (AWS Labs)](https://github.com/awslabs/multi-agent-orchestrator)
