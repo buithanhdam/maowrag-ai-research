@@ -4,7 +4,7 @@ from src.agents import (ReflectionAgent,
                         AgentOptions,
                         ManagerAgent)
 from src.tools.tool_manager import create_function_tool
-from src.agents.llm import UnifiedLLM
+from src.llm import UnifiedLLM
 
 def get_weather(location: str, unit: str = "celsius") -> dict:
         """Get current weather for a location
@@ -23,8 +23,8 @@ def get_weather(location: str, unit: str = "celsius") -> dict:
 
 async def test_reflection_async():
     async with ReflectionAgent(llm= UnifiedLLM(model_name="gemini")) as agent:
-        result = await agent.run(
-            user_msg="leonel messi most successful achievement in his career",
+        result = await agent.achat(
+            query="leonel messi most successful achievement in his career",
             verbose=1
         )
         print("reflection agent commplete: ",result)
@@ -37,8 +37,8 @@ async def test_planning_async():
         description="Get current weather information for a location"
     )
     async with PlanningAgent(llm= UnifiedLLM(model_name="gemini"),tools=[weather_tool]) as agent:
-        result = await agent.run(
-            task="What's the weather in Hanoi?",
+        result = await agent.achat(
+            query="What's the weather in Hanoi?",
             verbose=True
         )
         print("Planning agent commplete: ",result)
@@ -47,6 +47,7 @@ async def test_manager_agent():
     llm= UnifiedLLM(model_name="gemini")
     
     reflection_agent = ReflectionAgent(llm, AgentOptions(
+        id="reflection1",
         name="Reflection Assistant",
         description="Helps with information base on LLM"
     ))
@@ -58,8 +59,9 @@ async def test_manager_agent():
     )
     
     planning_agent = PlanningAgent(llm, AgentOptions(
+        id="react1",
         name="Planning Assistant",
-        description="Assists with project planning, task breakdown, and a weather tool"
+        description="Assists with project planning, task breakdown, and weather information"
     ),tools=[weather_tool])
     
     
@@ -69,7 +71,7 @@ async def test_manager_agent():
     )) as manager:
         manager.register_agent(reflection_agent)
         manager.register_agent(planning_agent)
-        response = await manager.run(
+        response = await manager.achat(
             query="Can you help me about today weather?",
             verbose=True
         )

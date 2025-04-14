@@ -1,11 +1,11 @@
 import asyncio
-from src.agents.llm import UnifiedLLM
+from src.llm import UnifiedLLM
 from llama_index.core.llms import ChatMessage
 
 async def test_gemini_achat():
     try:
         llm = UnifiedLLM(model_name="gemini")
-        response = llm.chat("Xin chào!")
+        response = await llm.achat("Xin chào!")
         print("=== Chat đơn giản ===")
         print(f"Response: {response}")
         
@@ -21,7 +21,7 @@ async def test_gemini_achat():
         print(f"Error: {str(e)}")
         raise
 
-async def test_gemini_async():
+async def test_gemini_astream():
     try:
         llm = UnifiedLLM(model_name="gemini")
         
@@ -43,4 +43,4 @@ async def test_gemini_async():
 
 if __name__ == "__main__":
     # test_gemini_sync()
-    asyncio.run(test_gemini_async())
+    asyncio.run(test_gemini_achat())

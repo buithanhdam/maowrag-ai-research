@@ -5,7 +5,7 @@ from llama_index.core.tools import FunctionTool
 import json
 from src.logger import get_formatted_logger
 from colorama import Fore
-from src.agents.llm import BaseLLM
+from src.llm import BaseLLM
 from src.agents.base import BaseAgent, AgentOptions
 from src.agents.utils import ChatHistory
 
