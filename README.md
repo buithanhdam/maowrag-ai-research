@@ -99,14 +99,14 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 Run unit tests using `pytest`:
 
 ```bash
-pytest src/tests/
+pytest tests/
 ```
 
 Or run individual test files directly:
 
 ```bash
-python3 src/tests/llm_test.py
-python3 src/tests/agent_test.py
+python3 tests/llm_test.py
+python3 tests/agent_test.py
 ```
 
 ---

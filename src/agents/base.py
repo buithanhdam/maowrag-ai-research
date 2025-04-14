@@ -5,7 +5,7 @@ from enum import Enum
 import json
 from typing import Any, Dict, Generator, List, Optional, Union
 from src.agents.utils import clean_json_response
-from src.agents.llm import BaseLLM
+from src.llm import BaseLLM
 from llama_index.core.llms import ChatMessage
 from typing import AsyncGenerator
 from llama_index.core.tools import FunctionTool
@@ -115,8 +115,9 @@ class BaseAgent(ABC):
             
         prompt = f"""
         Generate parameters to call this tool:
-        Step: {description}
+        Step Desciption: {description}
         Tool: {tool_name}
+        Tool description: {tool.metadata.description}
         
         Tool specification:
         {json.dumps(tool.metadata.get_parameters_dict(), indent=2)}
