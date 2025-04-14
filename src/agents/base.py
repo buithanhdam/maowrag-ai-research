@@ -115,8 +115,9 @@ class BaseAgent(ABC):
             
         prompt = f"""
         Generate parameters to call this tool:
-        Step: {description}
+        Step Desciption: {description}
         Tool: {tool_name}
+        Tool description: {tool.metadata.description}
         
         Tool specification:
         {json.dumps(tool.metadata.get_parameters_dict(), indent=2)}
