@@ -13,9 +13,9 @@ services:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
+      - QDRANT_URL=http://qdrant:6333
     networks:
-      - agent-network
-
+      - research-ai-network
   streamlit:
     build:
       context: .
@@ -29,12 +29,28 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       # Update this to match your FastAPI service's internal Docker network address
-      - API_URL=http://fastapi:8000
+      - BACKEND_URL=http://fastapi:8000
     depends_on:
       - fastapi
     networks:
-      - agent-network
-
+      - research-ai-network
+  qdrant:
+      image: "qdrant/qdrant:v1.12.0"
+      ports:
+        - "6333:6333"
+        - "6334:6334"
+      volumes:
+        - ./data/qdrant_storage:/qdrant/storage
+      environment:
+        QDRANT__STORAGE__ON_DISK_PAYLOAD: 'true'
+      networks:
+        - research-ai-network
+      healthcheck:
+        test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/6333 && echo -e 'GET /healthz HTTP/1.1\r\nHost: localhost\r\n\r\n' >&3 && cat <&3 | grep -q '200 OK'"]
+        interval: 30s
+        timeout: 180s
+        retries: 3
+        start_period: 40s
 networks:
-  agent-network:
+  research-ai-network:
     driver: bridge
