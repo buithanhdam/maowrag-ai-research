@@ -8,13 +8,11 @@ It aims to serve as a **personal lab for rapid experimentation and learning**, o
 
 ### 🔍 Key Projects and Technologies
 
-- **RAG Techniques**:  
-  Leverage advanced multi-agent RAG systems for document search, knowledge retrieval, and reasoning:  
+- **RAG Techniques and Multi-Agent Orchestration**:  
+  - Leverage advanced multi-agent RAG systems for document search, knowledge retrieval, and reasoning:  
   👉 [RAG App with Multi-Agent](https://github.com/buithanhdam/rag-app-agent-llm)
-
-- **Multi-Agent Orchestration**:  
-  Explore powerful workflows with **Planning (ReAct flow)**, **Reflection**, **Tool Use**, and custom agents like:
-  👉 [Multi-Agent Orchestrator](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
+  - Explore powerful workflows with **Planning (ReAct flow)**, **Reflection**, **Tool Use**, and custom agents like:
+  👉 [Multi-Agent Orchestrator with tools](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
 
 - **Meeting Note Agent**:  
   Summarizes and organizes meeting discussions intelligently:  
@@ -37,6 +35,7 @@ It aims to serve as a **personal lab for rapid experimentation and learning**, o
 This repository aims to stay at the cutting edge of:
 - `CodeAtc Agent` – intelligent code generation/execution
 - `Deep Research Agent` – auto web search, context synthesis
+- **RAG Techniques**
 - 🤖 **Autonomous Multi-Agent Systems**  
 - 🧩 **Agentic Design Patterns: Planning, Reflection, Memory, Tool Use**
 - 🔍 **Deep Research Agents** – self-guided, multi-step web and document understanding
@@ -107,13 +106,23 @@ Or run individual test files directly:
 ```bash
 python3 tests/llm_test.py
 python3 tests/agent_test.py
+python3 tests/rag_test.py
+...
 ```
 
 ---
 
 ## 🚀 Running the Application
 
-### 1. Start the FastAPI Backend
+### 1. Start the Qdrant vector store with docker
+
+```bash
+docker compose -f docker-compose.qdrant.yaml up
+```
+
+- Qdrant Host: [http://localhost:6333/dashboard#](http://localhost:6333/dashboard#)
+
+### 2. Start the FastAPI Backend
 
 ```bash
 uvicorn app_fastapi:app --host 0.0.0.0 --port 8000 --reload
@@ -121,7 +130,7 @@ uvicorn app_fastapi:app --host 0.0.0.0 --port 8000 --reload
 
 - API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### 2. Start the Streamlit Frontend
+### 3. Start the Streamlit Frontend
 
 ```bash
 streamlit run app_streamlit.py --server.port=8501 --server.address=0.0.0.0
@@ -131,7 +140,7 @@ streamlit run app_streamlit.py --server.port=8501 --server.address=0.0.0.0
 
 ---
 
-## 🐳 Run with Docker
+## 🐳 Run all service with Docker
 
 ### 1. Build Docker Images
 
@@ -147,6 +156,7 @@ docker-compose up
 
 - FastAPI backend: [http://localhost:8000](http://localhost:8000)  
 - Streamlit UI: [http://localhost:8501](http://localhost:8501)
+- Qdrant Host: [http://localhost:6333/dashboard#](http://localhost:6333/dashboard#)
 
 ### 3. Stop Containers
 

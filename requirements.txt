@@ -11,3 +11,10 @@ streamlit==1.39.0
 tavily-python==0.5.1
 uvicorn
 geopy==2.4.1
+fastembed==0.6.1
+qdrant_client==1.13.3 
+PyMuPDF==1.25.5
+html2text==2024.2.26
+openpyxl==3.1.5
+python-docx==1.1.2
+theflow==0.8.6

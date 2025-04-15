@@ -1,10 +1,30 @@
 from dataclasses import dataclass
+import enum
 from pydantic import BaseModel
 import dotenv 
 dotenv.load_dotenv()
 import os
 from src.prompt import (LLM_SYSTEM_PROMPT)
 
+SUPPORTED_FILE_EXTENSIONS = [
+    ".pdf",
+    ".docx",
+    ".html",
+    ".txt",
+    ".csv",
+    ".xlsx",
+    # ".json",
+    # ".pptx",
+]
+
+class RAGType(enum.Enum):
+    NORMAL = "normal_rag"
+    HYBRID = "hybrid_rag"
+    CONTEXTUAL = "contextual_rag"
+    FUSION = "fusion_rag"
+    HYDE = "hyde_rag"
+    NAIVE = "naive_rag"
+    
 class LLMConfig(BaseModel):
     api_key: str
     model_name: str
@@ -12,7 +32,13 @@ class LLMConfig(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 2048
     system_prompt: str = "You are a helpful assistant."
-
+    
+class QdrantPayload(BaseModel):
+    """Payload for vectors in Qdrant"""
+    document_id: str | int
+    text: str
+    vector_id: str
+    
 class Config:
     OPENAI_CONFIG = LLMConfig(
         api_key=os.environ.get('OPENAI_API_KEY'),
