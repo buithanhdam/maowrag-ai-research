@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 # Get API URL from environment variable, with a default fallback
-API_URL = os.getenv('API_URL', 'http://localhost:8000')
+API_URL = os.getenv('BACKEND_URL', 'http://localhost:8000')
 
 def initialize_session_state():
     if 'messages' not in st.session_state:

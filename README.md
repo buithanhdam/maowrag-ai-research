@@ -89,9 +89,10 @@ Add your API keys:
 GOOGLE_API_KEY=
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
-
 TAVILY_API_KEY=
+
 QDRANT_URL=http://localhost:6333
+BACKEND_URL=http://localhost:8000
 ```
 
 ---

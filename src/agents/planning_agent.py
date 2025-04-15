@@ -25,8 +25,6 @@ class PlanningAgent(BaseAgent):
         
         Task to accomplish: {task}
         
-        Chat history: {str(chat_history)}
-        
         Available tools and specifications:
         {self._format_tool_signatures()}
         
@@ -53,7 +51,7 @@ class PlanningAgent(BaseAgent):
         try:
             if verbose:
                 logger.info("Generating initial plan...")
-            response = await self.llm.achat(query=prompt)
+            response = await self.llm.achat(query=prompt,chat_history=chat_history)
             response = clean_json_response(response)
             plan_data = json.loads(response)
             
@@ -86,7 +84,6 @@ class PlanningAgent(BaseAgent):
         Create a clear and concise summary based on the following:
         
         Original task: {task}
-        Chat history: {str(chat_history)}
         Results from execution: {results}
         
         Rules:
@@ -102,7 +99,7 @@ class PlanningAgent(BaseAgent):
         summary_prompt = self.system_prompt + "\n" + prompt
         
         try:
-            result = await self.llm.achat(query=summary_prompt)
+            result = await self.llm.achat(query=summary_prompt, chat_history=chat_history)
             if verbose:
                 logger.info(f"Summary generated successfully with final result: {result}.")
             return result
@@ -147,7 +144,7 @@ class PlanningAgent(BaseAgent):
                             results.append(result)
                     else:
                         # Non-tool step - use LLM directly
-                        result = await self.llm.achat(query=step.description)
+                        result = await self.llm.achat(query=step.description, chat_history=chat_history)
                         results.append(result)
                         
                 except Exception as e:
@@ -260,7 +257,7 @@ class PlanningAgent(BaseAgent):
                             results.append(result)
                     else:
                         yield "Processing with general knowledge...\n"
-                        result = await self.llm.achat(query=step.description)
+                        result = await self.llm.achat(query=step.description, chat_history=chat_history)
                         results.append(result)
                         
                 except Exception as e:
