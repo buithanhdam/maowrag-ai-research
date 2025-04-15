@@ -33,6 +33,14 @@ class LLMConfig(BaseModel):
     max_tokens: int = 2048
     system_prompt: str = "You are a helpful assistant."
     
+class RAGConfig(BaseModel):
+    """Configuration for RAG Manager"""
+    chunk_size: int = 512
+    chunk_overlap: int = 64
+    default_collection: str = "documents"
+    max_results: int = 5
+    similarity_threshold: float = 0.7
+       
 class QdrantPayload(BaseModel):
     """Payload for vectors in Qdrant"""
     document_id: str | int
@@ -65,4 +73,6 @@ class Config:
         max_tokens=4000,
         system_prompt=LLM_SYSTEM_PROMPT
     )
+    QDRANT_URL = os.environ.get("QDRANT_URL")
+    RAG_CONFIG: RAGConfig = RAGConfig()
 

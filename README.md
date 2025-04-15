@@ -86,9 +86,12 @@ cp .env.example .env
 Add your API keys:
 
 ```env
-GOOGLE_API_KEY=your_google_api_key
-OPENAI_API_KEY=your_openai_api_key
-ANTHROPIC_API_KEY=your_anthropic_api_key
+GOOGLE_API_KEY=
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+
+TAVILY_API_KEY=
+QDRANT_URL=http://localhost:6333
 ```
 
 ---
