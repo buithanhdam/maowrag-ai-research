@@ -23,5 +23,5 @@ def retrieve_documents(query: str) -> str:
 rag_retriever_tool = create_function_tool(
     func=retrieve_documents,
     name="rag_retriever_tool",
-    description="Search through knowledge base return relevant information",
+    description="Search through business knowledge base return relevant business information",
 )

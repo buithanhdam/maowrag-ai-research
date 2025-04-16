@@ -4,10 +4,10 @@ import asyncio
 
 from src.agents import (
     ReflectionAgent,
-    PlanningAgent,
+    ReActAgent,
     AgentOptions,
 )
-from src.tools import get_weather_tool, search_web_tool, rag_retriever_tool
+from src.tools import get_weather_tool, search_web_tool, rag_retriever_tool,search_paper_tool
 from src.llm import UnifiedLLM
 from llama_index.core.llms import ChatMessage
 from src.logger import get_formatted_logger
@@ -27,15 +27,15 @@ class AgentService:
             system_prompt="Bạn là 1 trợ lý AI hữu ích, thân thiện và có hiểu biết sâu rộng."
         )
         
-        self.planning_agent = PlanningAgent(
+        self.planning_agent = ReActAgent(
             self.llm,
             AgentOptions(
-                id="planning",
-                name="Planning Assistant",
-                description="Assists with project planning, task breakdown, and using weather tool"
+                id="react",
+                name="React Assistant",
+                description="Assists can reason and act with project planning, task breakdown, and using weather tool"
             ),
             system_prompt="Bạn là 1 trợ lý AI hữu ích, thân thiện và có hiểu biết sâu rộng.",
-            tools=[get_weather_tool, search_web_tool,rag_retriever_tool]
+            tools=[get_weather_tool, search_web_tool,rag_retriever_tool,search_paper_tool]
         )
         
         # Chat history to provide context

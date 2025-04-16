@@ -4,11 +4,13 @@ from enum import Enum
 from src.logger import get_formatted_logger
 from .base import BaseSearchEngine
 from .tavily_search_engine import TavilyEngine
+from .arxiv_search_engine import ArXivSearchEngine
 
 logger = get_formatted_logger(__file__)
 
 class SearchEngineType(Enum):
     TAVILY = "Tavily"
+    ARXIV = "ArXiv"
     # Add other search engine types here
 
 class SearchEngineManager:
@@ -17,6 +19,7 @@ class SearchEngineManager:
     """
     _search_engine_implementations = {
         SearchEngineType.TAVILY: TavilyEngine,
+        SearchEngineType.ARXIV: ArXivSearchEngine,
     }
 
     @classmethod
