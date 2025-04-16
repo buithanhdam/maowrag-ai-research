@@ -1,4 +1,5 @@
 from .search_engine_manager import SearchEngineManager,SearchEngineType
 from .base import BaseSearchEngine
 from .tavily_search_engine import TavilyEngine
-__all__ = ["SearchEngineManager", "BaseSearchEngine","SearchEngineType","TavilyEngine"]
+from .arxiv_search_engine import ArXivSearchEngine
+__all__ = ["SearchEngineManager", "BaseSearchEngine","SearchEngineType","TavilyEngine","ArXivSearchEngine"]
