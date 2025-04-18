@@ -1,6 +1,6 @@
 from src.readers import FileExtractor, parse_multiple_files
 from src.rag.rag_manager import RAGManager
-from src.config import RAGType
+from src.config import RAGType, LLMType, global_config
 from src.db.qdrant import QdrantVectorDatabase
 import dotenv
 import os 
@@ -22,14 +22,14 @@ if __name__ == "__main__":
     
     # Initialize Qdrant vector database
     qdrant_db = QdrantVectorDatabase(
-        url=os.environ.get("QDRANT_URL"),
+        url=global_config.QDRANT_URL,
     )
     
     # Initialize RAG manager
     rag_manager = RAGManager.create_rag(
         rag_type=RAGType.NAIVE,
-        qdrant_url=os.environ.get("QDRANT_URL"),
-        gemini_api_key=os.environ.get("GOOGLE_API_KEY"),
+        vector_db_url=global_config.QDRANT_URL,
+        llm_type=LLMType.GEMINI,
     )
     
     qdrant_db.create_collection(collection_name=collection_name)

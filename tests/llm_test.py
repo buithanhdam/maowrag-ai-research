@@ -1,10 +1,10 @@
 import asyncio
 from src.llm import UnifiedLLM
 from llama_index.core.llms import ChatMessage
-
+from src.config import LLMType
 async def test_gemini_achat():
     try:
-        llm = UnifiedLLM(model_name="gemini")
+        llm = UnifiedLLM(model_name=LLMType.GEMINI)
         response = await llm.achat("Xin chào!")
         print("=== Chat đơn giản ===")
         print(f"Response: {response}")
@@ -23,7 +23,7 @@ async def test_gemini_achat():
 
 async def test_gemini_astream():
     try:
-        llm = UnifiedLLM(model_name="gemini")
+        llm = UnifiedLLM(model_name=LLMType.GEMINI)
         
         # response = await llm.achat("Xin chào!")
         # print("\n=== Async chat ===")

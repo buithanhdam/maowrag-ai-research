@@ -25,6 +25,11 @@ class RAGType(enum.Enum):
     HYDE = "hyde_rag"
     NAIVE = "naive_rag"
     
+class LLMType(enum.Enum):
+    GEMINI = "gemini"
+    OPENAI = "openai"
+    CLAUDE = "claude" 
+     
 class LLMConfig(BaseModel):
     api_key: str
     model_name: str
@@ -50,7 +55,7 @@ class QdrantPayload(BaseModel):
 class Config:
     OPENAI_CONFIG = LLMConfig(
         api_key=os.environ.get('OPENAI_API_KEY'),
-        model_name="GPT",
+        model_name=LLMType.OPENAI,
         model_id="gpt-3.5-turbo",
         temperature=0.7,
         max_tokens= 2048,
@@ -59,7 +64,7 @@ class Config:
 
     GEMINI_CONFIG = LLMConfig(
         api_key=os.environ.get('GOOGLE_API_KEY'),
-        model_name="Gemini",
+        model_name=LLMType.GEMINI,
         model_id="models/gemini-2.0-flash",
         temperature=0.8,
         max_tokens = 2048,
@@ -67,7 +72,7 @@ class Config:
     )
     CLAUDE_CONFIG = LLMConfig(
         api_key=os.environ.get('ANTHROPIC_API_KEY'),
-        model_name="Claude",
+        model_name=LLMType.CLAUDE,
         model_id="claude-3-haiku-20240307",
         temperature=0.7,
         max_tokens=4000,
@@ -75,4 +80,15 @@ class Config:
     )
     QDRANT_URL = os.environ.get("QDRANT_URL")
     RAG_CONFIG: RAGConfig = RAGConfig()
+
+global_config = Config()
+def get_llm_config(llm_type: LLMType) -> LLMConfig:
+    if llm_type == LLMType.OPENAI:
+        return global_config.OPENAI_CONFIG
+    elif llm_type == LLMType.GEMINI:
+        return global_config.GEMINI_CONFIG
+    elif llm_type == LLMType.CLAUDE:
+        return global_config.CLAUDE_CONFIG
+    else:
+        raise ValueError(f"Unsupported LLM type: {llm_type}")
 

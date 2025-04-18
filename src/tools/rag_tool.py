@@ -1,6 +1,6 @@
 from src.rag.rag_manager import RAGManager
 from src.config import RAGType
-from src.config import Config
+from src.config import global_config, LLMType
 from .base import create_function_tool
 
 RAG_DESCRIPTION = f"""
@@ -13,11 +13,10 @@ def retrieve_documents(query: str) -> str:
     Args:
         query: Search query
     """
-    settings = Config()
     rag_manager = RAGManager.create_rag(
             rag_type=RAGType.HYBRID,
-            qdrant_url=settings.QDRANT_URL,
-            gemini_api_key=settings.GEMINI_CONFIG.api_key,
+            vector_db_url=global_config.QDRANT_URL,
+            llm_type=LLMType.GEMINI,
         )
     def search_documents(query: str, collection_name: str = "test_collection", limit: int = 5) -> str:
         return rag_manager.search(query=query, collection_name=collection_name,limit=limit)
