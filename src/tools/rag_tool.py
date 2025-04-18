@@ -2,6 +2,10 @@ from src.rag.rag_manager import RAGManager
 from src.config import RAGType
 from src.config import Config
 from .base import create_function_tool
+
+RAG_DESCRIPTION = f"""
+Search through business knowledge base return relevant business information
+"""
 def retrieve_documents(query: str) -> str:
     """
     Search through knowledge base return relevant information
@@ -23,5 +27,5 @@ def retrieve_documents(query: str) -> str:
 rag_retriever_tool = create_function_tool(
     func=retrieve_documents,
     name="rag_retriever_tool",
-    description="Search through business knowledge base return relevant business information",
+    description=RAG_DESCRIPTION,
 )
