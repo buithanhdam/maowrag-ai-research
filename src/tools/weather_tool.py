@@ -2,6 +2,13 @@ from .base import create_function_tool
 from geopy.geocoders import Nominatim
 import requests
 from datetime import datetime
+
+WEATHER_DESCRIPTION = f"""
+Retrieves the weather using Open-Meteo API for a given location (city) and a date (yyyy-mm-dd) format. 
+Note that the current date is {datetime.now().strftime('%Y-%m-%d')}.
+Returns a dictionary with time, temperature, humidity, precipitation, and windspeed for each hour.
+"""
+
 geolocator = Nominatim(user_agent="weather-app") 
 def get_weather(location: str, date: str):
     """Retrieves the weather using Open-Meteo API for a given location (city) and a date (yyyy-mm-dd). 
@@ -34,6 +41,5 @@ def get_weather(location: str, date: str):
 get_weather_tool = create_function_tool(
             get_weather,
             name="get_weather",
-            description=f"""get weather infomation for a given location (city) with date must be (yyyy-mm-dd) format.
-            Note that the current date is {datetime.now().strftime('%Y-%m-%d')}."""
+            description=WEATHER_DESCRIPTION
         )
