@@ -1,14 +1,15 @@
 import asyncio
 from src.agents import (ReflectionAgent,
-                        PlanningAgent,
+                        ReActAgent,
                         AgentOptions,
                         ManagerAgent)
 from src.tools import get_weather_tool,search_web_tool
 from src.llm import UnifiedLLM
+from src.config import LLMType, global_config
 
 
 async def test_reflection_async():
-    llm= UnifiedLLM(model_name="gemini")
+    llm= UnifiedLLM(model_name=LLMType.GEMINI)
     
     reflection_agent = ReflectionAgent(llm, AgentOptions(
         id="reflection1",
@@ -24,8 +25,8 @@ async def test_reflection_async():
 async def test_planning_async():
     # Initialize agent
         # Create tools
-    llm= UnifiedLLM(model_name="gemini")
-    planning_agent = PlanningAgent(llm, AgentOptions(
+    llm= UnifiedLLM(model_name=LLMType.GEMINI)
+    planning_agent = ReActAgent(llm, AgentOptions(
         id="react1",
         name="Planning Assistant",
         description="Assists with project planning, task breakdown, and weather information"
@@ -39,7 +40,7 @@ async def test_planning_async():
         print("Planning agent commplete: ",result)
 
 async def test_manager_agent():
-    llm= UnifiedLLM(model_name="gemini")
+    llm= UnifiedLLM(model_name=LLMType.GEMINI)
     
     reflection_agent = ReflectionAgent(llm, AgentOptions(
         id="reflection1",
@@ -47,7 +48,7 @@ async def test_manager_agent():
         description="Helps with information base on LLM"
     ))
     
-    planning_agent = PlanningAgent(llm, AgentOptions(
+    planning_agent = ReActAgent(llm, AgentOptions(
         id="react1",
         name="Planning Assistant",
         description="Assists with project planning, task breakdown, and weather information"

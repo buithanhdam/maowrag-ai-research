@@ -3,14 +3,14 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Generator, List, Optional
 from llama_index.core.llms import ChatMessage
 import logging
-
+from src.config import LLMType
 logger = logging.getLogger(__name__)
 
 class BaseLLM(ABC):
     def __init__(
         self, 
         api_key: str, 
-        model_name: str, 
+        model_name: LLMType, 
         model_id: str, 
         temperature: float, 
         max_tokens: int, 
@@ -21,7 +21,7 @@ class BaseLLM(ABC):
 
         Args:
             api_key (str): API key cho model
-            model_name (str): Tên của model
+            model_name (LLMType): Tên của model
             model_id (str): ID của model
             temperature (float): Nhiệt độ cho việc sinh text
             max_tokens (int): Số tokens tối đa cho mỗi response

@@ -1,7 +1,4 @@
-import logging
-from typing import Optional, List, AsyncGenerator, Generator
-import asyncio
-
+from typing import List, AsyncGenerator
 from src.agents import (
     ReflectionAgent,
     ReActAgent,
@@ -10,12 +7,14 @@ from src.agents import (
 from src.tools import get_weather_tool, search_web_tool, rag_retriever_tool,search_paper_tool
 from src.llm import UnifiedLLM
 from llama_index.core.llms import ChatMessage
+from src.config import LLMType
+
 from src.logger import get_formatted_logger
 logger = get_formatted_logger(__name__)
 class AgentService:
     def __init__(self):
         # Initialize LLM
-        self.llm = UnifiedLLM(model_name="gemini")
+        self.llm = UnifiedLLM(model_name=LLMType.GEMINI)
         # Initialize specialized agents
         self.reflection_agent = ReflectionAgent(
             self.llm,
