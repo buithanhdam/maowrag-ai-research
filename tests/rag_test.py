@@ -35,7 +35,7 @@ if __name__ == "__main__":
     qdrant_db.create_collection(collection_name=collection_name)
     for document in documents:
         chunks = rag_manager.process_document(
-            document=document.text,
+            document=document,
             document_id=file_id,
             collection_name=collection_name,
             metadata={
