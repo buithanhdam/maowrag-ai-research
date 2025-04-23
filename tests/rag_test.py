@@ -10,7 +10,7 @@ dotenv.load_dotenv()
 if __name__ == "__main__":
     # Example usage
     collection_name="test_collection"
-    file = "tests/test_data/test-vlc.pdf"
+    file = "tests/test_data/t3qWG.png"
     file_id = str(uuid.uuid4())
     
     file_extractor = FileExtractor()
