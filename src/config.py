@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import enum
+from typing import Any, Dict
 from pydantic import BaseModel
 import dotenv 
 dotenv.load_dotenv()
@@ -51,6 +52,7 @@ class QdrantPayload(BaseModel):
     document_id: str | int
     text: str
     vector_id: str
+    metadata: Dict[str, Any]
     
 class Config:
     OPENAI_CONFIG = LLMConfig(
