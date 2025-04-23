@@ -14,8 +14,33 @@ SUPPORTED_FILE_EXTENSIONS = [
     ".txt",
     ".csv",
     ".xlsx",
-    # ".json",
+    ".json",
     # ".pptx",
+    ".md",
+    ".ipynb",
+    ".mbox",
+    ".xml",
+    ".rtf",
+    
+]
+ACCEPTED_MIME_MEDIA_TYPE_PREFIXES = [
+    "audio/wav",
+    "audio/x-wav",
+    "audio/mpeg",
+    "audio/mp4",
+    "video/mp4",
+    # "image/jpeg", 
+    # "image/png",
+]
+
+SUPPORTED_MEDIA_FILE_EXTENSIONS = [
+    ".wav",
+    ".mp3",
+    ".m4a",
+    ".mp4",
+    # ".jpg",
+    # ".jpeg",
+    # ".png"
 ]
 
 class RAGType(enum.Enum):
