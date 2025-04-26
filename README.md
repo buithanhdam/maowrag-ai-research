@@ -9,8 +9,8 @@ It aims to serve as a **personal lab for rapid experimentation and learning**, o
 ### 🔍 Key Projects and Technologies
 
 - **RAG Techniques and Multi-Agent Orchestration**:  
-  - Leverage advanced multi-agent RAG systems for document search, knowledge retrieval, and reasoning:  
-  👉 [RAG App with Multi-Agent](https://github.com/buithanhdam/rag-app-agent-llm)
+  - Leverage advanced multi-agent, web search, environment, RAG systems for document search, knowledge retrieval, and reasoning:  
+  👉 [AI Unlimited RAG App with Multi-Agent](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
   - Explore powerful workflows with **Planning (ReAct flow)**, **Reflection**, **Tool Use**, and custom agents like:
   👉 [Multi-Agent Orchestrator with tools](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
 
