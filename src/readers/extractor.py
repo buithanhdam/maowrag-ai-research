@@ -1,26 +1,29 @@
-# from llama_index.readers.json import JSONReader
 from pathlib import Path
-from llama_index.readers.file import (
+from .file import (
+    JSONReader,
     PandasCSVReader,
-    PptxReader,  # noqa
-    UnstructuredReader,
     MarkdownReader,
     IPYNBReader,
     MboxReader,
     XMLReader,
-    RTFReader
-)
-
-from src.readers.loaders import (DocxReader,TxtReader,ExcelReader,HtmlReader,MhtmlReader,PDFReader,PDFThumbnailReader,PandasExcelReader)
+    RTFReader,DocxReader,TxtReader,ExcelReader,HtmlReader,MhtmlReader,PDFReader,PDFThumbnailReader,PandasExcelReader)
+from .media import MarkItDown
+from google import genai
+from src.config import global_config
 
 def get_extractor():
+    md = MarkItDown(enable_plugins=False)
+    ocr_md = MarkItDown(
+        llm_client=genai.Client(api_key=global_config.GEMINI_CONFIG.api_key),
+        llm_model=global_config.GEMINI_CONFIG.model_id.split("/")[1]
+    )
     return {
-        ".pdf": PDFReader(),
+        ".pdf": PDFThumbnailReader(),
         ".docx": DocxReader(),
         ".html": HtmlReader(),
         ".csv": PandasCSVReader(pandas_config=dict(on_bad_lines="skip")),
         ".xlsx": ExcelReader(),
-        # ".json": JSONReader(),
+        ".json": JSONReader(),
         ".txt": TxtReader(),
         # ".pptx": PptxReader(),
         ".md": MarkdownReader(),
@@ -28,6 +31,13 @@ def get_extractor():
         ".mbox": MboxReader(),
         ".xml": XMLReader(),
         ".rtf": RTFReader(),
+        ".wav":md,
+        ".mp3":md,
+        ".m4a":md,
+        ".mp4":md,
+        ".jpg":ocr_md,
+        ".jpeg":ocr_md,
+        ".png":ocr_md
     }
     
 class FileExtractor:

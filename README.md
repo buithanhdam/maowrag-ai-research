@@ -99,6 +99,29 @@ BACKEND_URL=http://localhost:8000
 
 ## ✅ Running Tests
 
+### Prerequisites for Audio/Video Processing
+
+To process audio/video files, FFmpeg is required:
+
+#### For Ubuntu/Debian
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+#### For macOS (Homebrew)
+```bash
+brew install ffmpeg
+```
+
+#### For Windows
+1. Download FFmpeg from [FFmpeg official website](https://ffmpeg.org/download.html).
+2. Extract the files and add the `bin` folder to your system's PATH.
+3. Restart your terminal and verify installation with:
+   ```bash
+   ffmpeg -version
+   ```
+
 Run unit tests using `pytest`:
 
 ```bash
