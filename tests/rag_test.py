@@ -10,7 +10,7 @@ dotenv.load_dotenv()
 if __name__ == "__main__":
     # Example usage
     collection_name="test_collection"
-    file = "tests/test_data/t3qWG.png"
+    file = "tests/test_data/vantage-logistics-vietnam.jpg"
     file_id = str(uuid.uuid4())
     
     file_extractor = FileExtractor()
@@ -40,7 +40,7 @@ if __name__ == "__main__":
             collection_name=collection_name,
             metadata={
                 **document.metadata,
-                "document_name": file,
+                "file_path": file,
                 "created_at": datetime.now().isoformat(),
             }
         )
