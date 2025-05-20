@@ -5,15 +5,17 @@ from pydantic import BaseModel
 from llama_index.core.llms import ChatMessage
 from typing import AsyncGenerator
 from llama_index.core.tools import FunctionTool
-from llama_index.core.program import LLMTextCompletionProgram
 from llama_index.core.output_parsers import PydanticOutputParser
+from llama_index.core.program import LLMTextCompletionProgram
 
 from src.logger import get_formatted_logger
-from src.agents.design import (
+from .design import (
     clean_json_response,
     AgentCallbacks,
     AgentOptions,
-    retry_on_json_parse_error
+    AgentResponse,
+    ChatMemory,
+    retry_on_json_parse_error,
 )
 from src.llm import BaseLLM
 
@@ -42,7 +44,7 @@ class BaseAgent(ABC):
         self.tools = tools
         self.tools_dict = {tool.metadata.name: tool for tool in tools}
         self.logger = get_formatted_logger(__file__)
-        # self.logger = logging.getLogger(__name__)
+        self.chat_memory = ChatMemory()
     @staticmethod        
     def _generate_id_from_name(name: str) -> str:
         import re
@@ -68,38 +70,36 @@ class BaseAgent(ABC):
     async def _output_parser(
         self,
         output: str,
-        chat_history: List[ChatMessage] = [],
     ) -> str:
-        final_output = output
+        final_output = ""
         try:
-            if self.structured_output:
-                program = LLMTextCompletionProgram.from_defaults(
-                    output_parser=PydanticOutputParser(output_cls=self.structured_output),
-                    llm=self.llm._get_model(),
-                    prompt_template_str=output,
-                    verbose=True
-                )
-                parsed_output = program()
+            program = LLMTextCompletionProgram.from_defaults(
+                output_parser=PydanticOutputParser(output_cls=self.structured_output),
+                llm=self.llm._get_model(),
+                prompt_template_str=output,
+                verbose=True
+            )
 
-                if isinstance(parsed_output, BaseModel):
-                    final_output = parsed_output.model_dump_json()
-                elif isinstance(parsed_output, str):
-                    parsed_output = clean_json_response(parsed_output)
-                    try:
-                        final_output = json.dumps(json.loads(parsed_output), indent=4)
-                    except json.JSONDecodeError as e:
-                        self.logger.error(f"Failed to parse JSON: {parsed_output} with error: {e}")
-                        raise e
-                else:
-                    self.logger.error(f"Unexpected output type: {type(parsed_output)}")
-                    final_output = str(parsed_output)
+            parsed_output = program()
+
+            if isinstance(parsed_output, BaseModel):
+                final_output = parsed_output.model_dump_json()
             else:
-                final_output = await self.llm.achat(query=output, chat_history=chat_history)
-            return final_output
-        except Exception as e:
-            self.logger.error(f"Error cleaning JSON response: {str(e)}")
-            return final_output
+                self.logger.warning(f"⚠️ Unexpected output type: {type(parsed_output)}. Attempting to clean.")
+                final_output = clean_json_response(str(parsed_output))
 
+        except Exception as e:
+            self.logger.error(f"❌ Parsing failed: {str(e)}. Fallback to raw LLM call.")
+            try:
+                structured_schema_prompt = f"""{output}\nIf an output schema was provided, please ensure your response conforms to this structure:\n{self._get_output_schema()}"""
+                fallback_output = await self.llm.achat(query=structured_schema_prompt, chat_history=self.chat_memory.get_all_memories())
+                fallback_output = clean_json_response(fallback_output)
+                final_output = self.structured_output.model_validate_json(fallback_output).model_dump_json()
+            except Exception as e:
+                self.logger.error(f"❌ Fallback parsing failed: {str(e)}. Returning raw fallback output.")
+                final_output = fallback_output
+
+        return final_output
    
     def _get_config(self) -> dict[str, Any]:
         """Get detailed config of the agent"""
@@ -146,45 +146,70 @@ class BaseAgent(ABC):
         return "\n".join(tool_descriptions)
 
     async def _execute_tool(
-        self, tool_name: str, description: str, requires_tool: bool
+        self,
+        task: str,
+        tool_name: str,
+        description: str,
+        requires_tool: bool,
     ) -> Optional[Any]:
-        """Execute a tool with better error handling"""
+        """Execute a tool with better error handling and context-awareness"""
         if not requires_tool or not tool_name:
             return None
 
         tool = self.tools_dict.get(tool_name)
         if not tool:
+            self._log_warning(f"Attempted to execute non-existent tool: {tool_name}")
             return None
 
         prompt = f"""
-        Generate parameters to call this tool:
-        Step Desciption: {description}
+        User Query: {task}
+        
+        Current Step Description: {description}
+        
+        Based on the User Query, the Current Step Description, and the Context from Previously Completed Steps, you need to generate the EXACT parameters to call the tool '{tool_name}'.
+        
         Tool: {tool_name}
         Tool description: {tool.metadata.description}
         
-        Tool specification:
+        Tool specification (REQUIRED PARAMETERS and their types/descriptions):
         {json.dumps(tool.metadata.get_parameters_dict(), indent=2)}
+        
+        Important rules for generating parameters:
+        1. ONLY generate parameters that are part of the 'Tool specification'.
+        2. Ensure the parameter values match the expected data types and formats.
+        3. Extract necessary information from the 'User Query' and 'Context from Previously Completed Steps'.
+        4. If a parameter is optional and not needed, omit it.
+        5. If a required parameter cannot be determined from the provided information, use a placeholder like "[UNDEFINED_PARAMETER]" but try your best to infer. (Ideally, the planning phase should prevent this).
         
         Response format:
         {{
             "arguments": {{
-                // parameter names and values matching the specification exactly
+                // parameter names and values matching the specification EXACTLY
             }}
         }}
         """
-
+        result = None
         try:
-            response = await self.llm.achat(query=prompt)
+            self._log_info(f"Generating arguments for tool '{tool_name}'...")
+
+            response = await self.llm.achat(query=prompt, chat_history=self.chat_memory.get_all_memories() or None)
+            
             response = clean_json_response(response)
             params = json.loads(response)
 
+            if "arguments" not in params or not isinstance(params["arguments"], dict):
+                raise ValueError("LLM did not return arguments in the expected format: {'arguments': {...}}")
+
+            self._log_info(f"Calling tool '{tool_name}' with arguments: {params['arguments']}")
             result = await tool.acall(**params["arguments"])
+            self._log_info(f"Tool '{tool_name}' executed. Result: {str(result)[:200]}...")
             return result
 
         except Exception as e:
+            self._log_error(f"Error generating arguments or executing tool '{tool_name}': {str(e)}")
             if requires_tool:
                 raise
-            return None
+            return result
 
     @abstractmethod
     def chat(

@@ -1,20 +1,18 @@
 import json
-from typing import AsyncGenerator, Generator, List, Any, Optional
+from typing import AsyncGenerator, Generator, List, Any, Optional, Dict, Union
 from llama_index.core.tools import FunctionTool
 from llama_index.core.llms import ChatMessage
 import asyncio
 
 from src.llm import BaseLLM
-from src.agents.design import (
+from ..design import (
     clean_json_response,
-    AgentCallbacks,
     AgentOptions,
     ExecutionPlan,
-    PlanContext,
     PlanStep,
     retry_on_error,
 )
-from src.agents.base import BaseAgent
+from ..base import BaseAgent
 
 
 class PlanningAgent(BaseAgent):
@@ -29,134 +27,140 @@ class PlanningAgent(BaseAgent):
     ):
         super().__init__(llm, options, system_prompt, tools)
 
-    async def _refine_plan(
-        self, plan: ExecutionPlan, current_results: List[Any]
+    async def _evaluate_step_success(
+        self, step_num: int, step: PlanStep, result: Any, verbose: bool
+    ) -> bool:
+        """Evaluate if the step was successful based on its result."""
+        if result is None or (
+            isinstance(result, str)
+            and ("error" in result.lower() or not result.strip())
+        ):
+            self._log_warning(
+                f"Step {step_num} failed: Result is None or indicates error."
+            )
+            return False
+        if verbose:
+            self._log_info(f"Step {step_num} evaluated as successful.")
+        return True
+
+    async def _gen_plan(
+        self, task: str, verbose: bool
     ) -> ExecutionPlan:
-        """Điều chỉnh kế hoạch dựa trên kết quả hiện tại"""
-        # Cập nhật kế hoạch dựa trên kết quả của các bước trước
-        # Thêm/xóa/thay đổi các bước nếu cần
-        return "updated_plan"
-
-    async def _evaluate_step_success(self, step: PlanStep, result: Any) -> bool:
-        """Đánh giá liệu bước có thành công hay không"""
-        # Nếu bước yêu cầu dữ liệu cụ thể, kiểm tra xem kết quả có chứa dữ liệu đó không
-        return "evaluation_result"
-
-    async def _decide_next_action(
-        self, plan: ExecutionPlan, current_step: int, context: PlanContext
-    ) -> int:
-        """Quyết định bước tiếp theo cần thực hiện"""
-        # Có thể bỏ qua các bước, quay lại, hoặc kết thúc sớm
-        return "next_step_index"
-
-    async def _process_tool_output(self, tool_name: str, output: Any) -> Any:
-        """Xử lý kết quả từ công cụ dựa trên loại công cụ"""
-        # Xử lý đầu ra tùy thuộc vào loại công cụ
-        return "processed_output"
-
-    async def _find_relevant_tools(self, query: str) -> List[str]:
-        """Tìm các công cụ liên quan đến truy vấn"""
-        # Sử dụng vector search để tìm công cụ phù hợp nhất
-        return "relevant_tool_names"
-
-    @retry_on_error()
-    async def _get_initial_plan(
-        self, task: str, verbose: bool, chat_history: List[ChatMessage] = []
-    ) -> ExecutionPlan:
-        """Generate initial execution plan with focus on available tools"""
+        """Generate an optimized execution plan using available tools."""
         prompt = f"""
-        Acting as a planning assistant with access to specific tools. Create a focused plan using ONLY the tools listed below.
-        
-        Task to accomplish: {task}
-        
-        Available tools and specifications:
+        Acting as a planning assistant, create a focused plan using ONLY the tools listed below.
+
+        Task: {task}
+
+        Available tools:
         {self._format_tool_signatures()}
-        
-        Important rules:
-        1. ONLY use the tools listed above - do not assume any other tools exist
-        2. If a tool doesn't exist for a specific need, use your general knowledge to provide information
-        3. For information retrieval tasks, immediately use the RAG search tool if available
-        4. Keep the plan simple and focused - avoid unnecessary steps
-        5. Never include web searches or external tool usage in the plan
-        6. If no tools are needed, create a single step with requires_tool: false
-        
-        Format your response as JSON:
+
+        Rules:
+        1. Use only listed tools
+        2. Use general knowledge if no suitable tool exists
+        3. Keep the plan simple
+        4. Use a single step with requires_tool: false if no tools are needed
+
+        Response format:
         {{
             "steps": [
                 {{
                     "description": "step description",
                     "requires_tool": true/false,
                     "tool_name": "tool_name or null"
-                }},
-                ...
+                }}
             ]
         }}
         """
-
-        try:
+        if verbose:
+            self._log_info("Generating initial plan...")
+        response = await self.llm.achat(query=prompt, chat_history=self.chat_memory.get_long_memories())
+        plan_data = json.loads(clean_json_response(response))
+        plan = ExecutionPlan()
+        
+        def _is_valid_step(step: dict) -> bool:
+            if step.get("requires_tool") and step.get("tool_name") not in self.tools_dict:
+                return False
+            return bool(step.get("description"))
+        if not plan_data.get("steps") or not all(_is_valid_step(step) for step in plan_data["steps"]):
             if verbose:
-                self._log_info("Generating initial plan...")
-            response = await self.llm.achat(query=prompt, chat_history=chat_history)
-            response = clean_json_response(response)
-            plan_data = json.loads(response)
-
-            plan = ExecutionPlan()
-            for step_data in plan_data["steps"]:
-                # Validate tool name if step requires tool
-                if step_data["requires_tool"]:
-                    tool_name = step_data.get("tool_name")
-                    if tool_name not in self.tools_dict:
-                        # Skip invalid tool steps
-                        continue
-
-                plan.add_step(
-                    PlanStep(
-                        description=step_data["description"],
-                        tool_name=step_data.get("tool_name"),
-                        requires_tool=step_data.get("requires_tool", True),
-                    )
+                self._log_warning(f"Invalid plan generated. tool names are not valid.")
+                
+            raise ValueError("Invalid plan generated. tool names are not valid.")
+        for step_data in plan_data["steps"]:
+            if (
+                step_data["requires_tool"]
+                and step_data.get("tool_name") not in self.tools_dict
+            ):
+                # Skip invalid tools
+                if verbose:
+                    self._log_warning(f"Skipping invalid tool: {step_data.get('tool_name')}")
+                continue
+            plan.add_step(
+                PlanStep(
+                    description=step_data["description"],
+                    tool_name=step_data.get("tool_name"),
+                    requires_tool=step_data.get("requires_tool", True),
                 )
+            )
+        if not plan.steps:
+            # Fallback if no valid steps were generated
             if verbose:
-                self._log_info(
-                    f"Initial plan generated successfully with: {len(plan.steps)} step. Plan details: {plan_data}"
-                )
-            return plan
+                self._log_warning("No valid steps in plan, adding default step.")
+            plan.add_step(
+                PlanStep(description=f"Handle task: {task}", requires_tool=False)
+            )
+        if verbose:
+            self._log_info(f"Plan generated with {len(plan.steps)} steps.")
+        return plan
 
-        except Exception as e:
-            if verbose:
-                self._log_error(f"Error generating initial plan: {str(e)}")
-            raise e
+    async def _replan(
+        self,
+        task: str,
+        failed_step: PlanStep,
+        verbose: bool,
+    ) -> ExecutionPlan:
+        """Generate a new plan after a step failure."""
+        prompt = f"""
+        Previous plan failed at step: {failed_step.description}.
+        Completed steps: {self.chat_memory.get_short_memories()}
+        Replan for task: {task}, starting from the failed step.
+        """
+        if verbose:
+            self._log_info(f"Replanning after failure in step: {failed_step.description}")
+        return await self._gen_plan(prompt, verbose)
 
-    @retry_on_error()
     async def _generate_summary(
         self,
         task: str,
-        results: List[Any],
         verbose: bool,
-        chat_history: List[ChatMessage] = [],
     ) -> str:
         """Generate a coherent summary of the results"""
         SUMMARY_PROMPT = f"""\
-        You are responsible for combining Task Results into a coherent response.
+        You are responsible for combining Task Results into a summary coherent response.
         Original task: {task}
         Task Results:
-        {results}
-        If an output schema was provided, please ensure your response conforms to this structure:
-        {self._get_output_schema()}
-
+        {self.chat_memory.get_short_memories()}
         Please provide a comprehensive response that integrates all the information.
         Be concise and ensure all critical information is included.
         """
+            
         if verbose:
             self._log_info("Generating summary...")
 
         try:
-            result = await self._output_parser(
-                output=SUMMARY_PROMPT, chat_history=chat_history
-            )
+            # Make sure self._output_parser is defined in BaseAgent
+            if not self.structured_output:
+                result = await self.llm.achat(query=SUMMARY_PROMPT, chat_history=self.chat_memory.get_long_memories())
+            else:
+                result = await self._output_parser(
+                    output=SUMMARY_PROMPT
+                )
             if verbose:
                 self._log_info(
-                    f"Summary generated successfully with final result: {result}."
+                    f"Summary generated successfully with final result: {result[:100]}..."
+                    if len(str(result)) > 100
+                    else f"Summary generated successfully with final result: {result}."
                 )
             return result
         except Exception as e:
@@ -164,78 +168,110 @@ class PlanningAgent(BaseAgent):
                 self._log_error(f"Error generating summary: {str(e)}")
             raise e
 
+    async def _execute_plan(
+        self,
+        plan: ExecutionPlan,
+        task: str,
+        max_steps: int,
+        verbose: bool,
+    ):
+        """Execute the plan step by step with error handling and replanning capability"""
+        while plan.current_step_idx < len(plan.steps) and plan.current_step_idx < max_steps:
+            step = plan.get_current_step()
+            if not step:
+                self._log_warning(f"No step found at index {plan.current_step_idx}. Breaking loop.")
+                break
+            
+            step_num = plan.current_step_idx + 1
+            if verbose:
+                self._log_info(
+                    f"\nStep {step_num}/{len(plan.steps)}: {step.description}"
+                )
+
+            try:
+                result = await self._execute_step(task, step, verbose)
+                success = await self._evaluate_step_success(
+                    step_num, step, result, verbose
+                )
+                if not success:
+                    if verbose:
+                        self._log_warning(f"Step {step_num} failed. Replanning...")
+                    # Reset current step index as we have a new plan
+                    plan.mark_current_step_fail(result)
+                    plan = await self._replan(task, step, verbose)
+                    plan.current_step_idx = 0
+                else:
+                    # Only increment step index if step was successful
+                    plan.mark_current_step_complete(result)
+                    plan.current_step_idx += 1
+                self.chat_memory.add_short_memory("assistant", str(f"Step {plan.current_step_idx+1} ({step.description}): {step.result}"))
+            except Exception as e:
+                if verbose:
+                    self._log_error(f"Error executing step {step_num}: {str(e)}")
+                raise Exception(f"I apologize, but I encountered an error while processing your request: {str(e)}")
+
+
+    async def _execute_step(
+        self, task: str, step: PlanStep, verbose: bool
+    ) -> Any:
+        """Execute a single step of the plan"""
+        try:
+            if step.requires_tool:
+                if verbose:
+                    self._log_info(f"Using tool: {step.tool_name}")
+                result = await self._execute_tool(
+                    task,
+                    step.tool_name,
+                    step.description,
+                    step.requires_tool
+                )
+                if verbose:
+                    result_preview = str(result)[:100] + "..." if len(str(result)) > 100 else str(result)
+                    self._log_info(f"Tool {step.tool_name} executed successfully. Result snippet: {result_preview}")
+            else:
+                if verbose:
+                    self._log_info("Processing with general knowledge...")
+                result = await self.llm.achat(
+                    query=step.description, chat_history=self.chat_memory.get_short_memories()
+                )
+                if verbose:
+                    result_preview = str(result)[:100] + "..." if len(str(result)) > 100 else str(result)
+                    self._log_info(f"Non-tool step completed. Result snippet: {result_preview}")
+            return result
+        except Exception as e:
+            if verbose:
+                self._log_error(f"Error executing step: {str(e)}")
+            raise Exception(f"Step execution failed: {str(e)}")
+
     @retry_on_error()
     async def run(
         self,
         query: str,
-        max_steps: int = 3,
+        max_steps: int = 5,
         verbose: bool = False,
         chat_history: List[ChatMessage] = [],
     ) -> str:
-        """Execute the plan and generate response"""
+        """Run the planning agent process on the given query"""
         if verbose:
-            self._log_info(f"\nProcessing query: {query}")
+            self._log_info(f"🔍 Starting planning agent for query: {query}")
+
+        self.chat_memory.set_initial_long_memories(chat_history)
+        plan = await self._gen_plan(query, verbose)
 
         try:
-            # Generate plan
-            plan = await self._get_initial_plan(query, verbose, chat_history)
-            await asyncio.sleep(0.1)
-
-            if verbose:
-                self._log_info("\nExecuting plan...")
-
-            # Execute all steps and collect results
-            results = []
-            for step_num, step in enumerate(plan.steps, 1):
-                if step_num > max_steps:
-                    break
-
-                if verbose:
-                    self._log_info(
-                        f"\nStep {step_num}/{len(plan.steps)}: {step.description}"
-                    )
-
-                try:
-                    if step.requires_tool:
-                        result = await self._execute_tool(
-                            step.tool_name, step.description, step.requires_tool
-                        )
-                        if verbose:
-                            self._log_info(
-                                f"Tool {step.tool_name} executed successfully with arguments: {result}"
-                            )
-                        if result is not None:
-                            results.append(result)
-                    else:
-                        # Non-tool step - use LLM directly
-                        result = await self.llm.achat(
-                            query=step.description, chat_history=chat_history
-                        )
-                        results.append(result)
-                    await asyncio.sleep(0.1)
-                except Exception as e:
-                    if verbose:
-                        self._log_error(f"Error in step {step_num}: {str(e)}")
-                    if step.requires_tool:
-                        if verbose:
-                            self._log_error(
-                                f"Error executing tool {step.tool_name}: {str(e)}"
-                            )
-                        raise e
-                if verbose:
-                    self._log_info(f"Step {step_num}/{len(plan.steps)} completed.")
-
-            # Generate final summary
-            final_result = await self._generate_summary(query, results, verbose, chat_history)
-            await asyncio.sleep(0.1)
-            return final_result
+            await self._execute_plan(
+                plan, query, max_steps=max_steps, verbose=verbose
+            )
+            final_summary = await self._generate_summary(
+                query, verbose
+            )
+            return final_summary
 
         except Exception as e:
             if verbose:
                 self._log_error(f"Error in run: {str(e)}")
-            raise f"I apologize, but I encountered an error while processing your request: {str(e)}"
+            raise Exception(f"I apologize, but I encountered an error while processing your request: {str(e)}")
 
-    # New methods for chat, stream, achat, and astream implementation
     async def achat(
         self,
         query: str,
@@ -244,6 +280,7 @@ class PlanningAgent(BaseAgent):
         *args,
         **kwargs,
     ) -> str:
+        """Async chat interface for the planning agent"""
         # Get additional parameters or use defaults
         max_steps = kwargs.get("max_steps", 3)
 
@@ -273,6 +310,7 @@ class PlanningAgent(BaseAgent):
         *args,
         **kwargs,
     ) -> str:
+        """Synchronous chat interface for the planning agent"""
         # Create an event loop if one doesn't exist
         try:
             loop = asyncio.get_event_loop()
@@ -287,67 +325,6 @@ class PlanningAgent(BaseAgent):
             )
         )
 
-    @retry_on_error()
-    async def _stream_plan_execution(
-        self, query: str, max_steps: int, verbose: bool, chat_history: List[ChatMessage]
-    ) -> AsyncGenerator[str, None]:
-        """Stream the plan execution process with status updates"""
-        try:
-            # Start with planning notification
-            yield "Planning your request...\n"
-
-            # Generate plan
-            plan = await self._get_initial_plan(query, verbose)
-
-            yield f"Created plan with {len(plan.steps)} steps.\n"
-
-            # Execute all steps and collect results
-            results = []
-            for step_num, step in enumerate(plan.steps, 1):
-                if step_num > max_steps:
-                    yield "\nReached maximum number of steps. Finalizing results...\n"
-                    break
-
-                # Stream step information
-                yield f"\nExecuting step {step_num}: {step.description}\n"
-
-                try:
-                    if step.requires_tool:
-                        yield f"Using tool: {step.tool_name}\n"
-                        result = await self._execute_tool(
-                            step.tool_name, step.description, step.requires_tool
-                        )
-                        if result is not None:
-                            yield "Tool execution complete.\n"
-                            results.append(result)
-                    else:
-                        yield "Processing with general knowledge...\n"
-                        result = await self.llm.achat(query=step.description)
-                        results.append(result)
-
-                except Exception as e:
-                    error_msg = f"Error in step {step_num}: {str(e)}\n"
-                    yield error_msg
-                    self._log_error(error_msg)
-                    if step.requires_tool:
-                        raise
-
-            # Generate and stream final summary
-            yield "\nGenerating final response based on collected information...\n\n"
-
-            # Fallback if streaming is not available
-            summary = await self._generate_summary(query, results, verbose)
-            # Simulate streaming by yielding chunks
-            chunk_size = 15
-            for i in range(0, len(summary), chunk_size):
-                yield summary[i : i + chunk_size]
-                await asyncio.sleep(0.01)
-
-        except Exception as e:
-            error_msg = f"Error during plan execution: {str(e)}"
-            self._log_error(error_msg)
-            yield f"\n{error_msg}\n"
-
     async def astream_chat(
         self,
         query: str,
@@ -356,37 +333,26 @@ class PlanningAgent(BaseAgent):
         *args,
         **kwargs,
     ) -> AsyncGenerator[str, None]:
+        """Async streaming chat interface for the planning agent"""
         # Get additional parameters
         max_steps = kwargs.get("max_steps", 3)
         chat_history = chat_history or []
-        detailed_stream = kwargs.get("detailed_stream", False)
         if self.callbacks:
             self.callbacks.on_agent_start(self.name)
 
         try:
-            # If detailed_stream is True, show the entire planning process
-            if detailed_stream:
-                async for token in self._stream_plan_execution(
-                    query=query,
-                    max_steps=max_steps,
-                    verbose=verbose,
-                    chat_history=chat_history,
-                ):
-                    yield token
-            else:
-                # Otherwise, just run the normal flow and stream the final result
-                result = await self.run(
-                    query=query,
-                    max_steps=max_steps,
-                    verbose=verbose,
-                    chat_history=chat_history,
-                )
+            result = await self.run(
+                query=query,
+                max_steps=max_steps,
+                verbose=verbose,
+                chat_history=chat_history,
+            )
 
-                # Stream the final result in chunks to simulate streaming
-                chunk_size = 5
-                for i in range(0, len(result), chunk_size):
-                    yield result[i : i + chunk_size]
-                    await asyncio.sleep(0.01)
+            # Stream the final result in chunks to simulate streaming
+            chunk_size = 5
+            for i in range(0, len(result), chunk_size):
+                yield result[i : i + chunk_size]
+                await asyncio.sleep(0.01)
 
         finally:
             if self.callbacks:
@@ -400,6 +366,7 @@ class PlanningAgent(BaseAgent):
         *args,
         **kwargs,
     ) -> Generator[str, None, None]:
+        """Synchronous streaming chat interface for the planning agent"""
         # Create an event loop if one doesn't exist
         try:
             loop = asyncio.get_event_loop()

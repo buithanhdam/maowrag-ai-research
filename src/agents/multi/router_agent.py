@@ -4,10 +4,10 @@ from llama_index.core.tools import FunctionTool
 import json
 import asyncio
 
-from src.agents.design import (
+from ..design import (
     AgentOptions,clean_json_response
 )
-from src.agents.base import BaseAgent
+from ..base import BaseAgent
 from .base import BaseMultiAgent
 from src.llm import BaseLLM
 
@@ -185,7 +185,12 @@ class RouterAgent(BaseMultiAgent):
                 agent_response=agent_response,
                 validation_feedback=json.dumps(validation_feedback, indent=2)
             )
-            refined_response = await self._output_parser(refinement_prompt,chat_history)
+            if not self.structured_output:
+                refined_response = await self.llm.achat(query=refinement_prompt, chat_history=chat_history)
+            else:
+                refined_response = await self._output_parser(
+                    output=refinement_prompt, chat_history=chat_history
+                )
             if verbose:
                 self._log_info(f"Response refined successfully")
             return refined_response

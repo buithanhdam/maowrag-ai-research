@@ -5,10 +5,14 @@ from llama_index.core.tools import FunctionTool
 
 from src.llm import BaseLLM
 from .base import BaseMultiAgent
-from src.agents.design import (
+from ..design import (
     AgentOptions,
+    ExecutionPlan,
+    PlanStep,
+    ChatMemory,
+    retry_on_error,
 )
-from src.agents.base import BaseAgent
+from ..base import BaseAgent
 
 
 INTEGRATION_PROMPT = """\
@@ -21,9 +25,6 @@ Original User Query: {user_query}
 
 Agent Outputs:
 {agent_outputs}
-
-If an output schema was provided, please ensure your response conforms to this structure:
-{output_schema}
 
 Please provide a comprehensive response that integrates all the information from the specialized agents.
 Be concise and ensure all critical information is included.
@@ -46,7 +47,7 @@ class ParallelAgent(BaseMultiAgent):
         self,
         query: str,
         agents_to_execute: List[BaseAgent],
-        chat_history: List[ChatMessage] = [],
+        chat_history: ChatMemory,
         verbose: bool = False,
         additional_params: Dict[str, Any] = {}
     ) -> Dict[str, Any]:
@@ -63,7 +64,7 @@ class ParallelAgent(BaseMultiAgent):
                 agent.achat(
                     query=query,
                     verbose=verbose,
-                    chat_history=chat_history,
+                    chat_history=chat_history.get_all_memories(),
                     **additional_params
                 )
             )
@@ -97,21 +98,22 @@ class ParallelAgent(BaseMultiAgent):
             formatted_outputs.append(f"--- {agent_name} Output ---\n{result}\n")
             
         agent_outputs = "\n".join(formatted_outputs)
-        output_schema = self._get_output_schema()
         
         integration_prompt = INTEGRATION_PROMPT.format(
             user_query=query,
             agent_outputs=agent_outputs,
-            output_schema=output_schema
         )
         
         if verbose:
             self._log_info("Integrating results from multiple agents")
             
         try:
-            # If an output model is defined, use structured output
-            integration_result = await self._output_parser(output=integration_prompt, chat_history=chat_history)
-                
+            if not self.structured_output:
+                integration_result = await self.llm.achat(query=integration_prompt, chat_history=chat_history)
+            else:
+                integration_result = await self._output_parser(
+                    output=integration_prompt, chat_history=chat_history
+                )
             if verbose:
                 self._log_info("Integration completed successfully")
                 
@@ -127,9 +129,9 @@ class ParallelAgent(BaseMultiAgent):
         chat_history: List[ChatMessage] = [],
         verbose: bool = False,
         additional_params: Dict[str, Any] = {},
-        max_retries: int = 1
     ) -> str:
         """Process user request by executing multiple agents in parallel"""
+        chat_history_store = ChatMemory(initial_messages=chat_history)
         try:
             if self.callbacks:
                 self.callbacks.on_agent_start(self.name)
@@ -140,7 +142,7 @@ class ParallelAgent(BaseMultiAgent):
             if not agents_to_execute:
                 if verbose:
                     self._log_info("No agents available for execution")
-                response = await self.llm.achat("Answer this question: " + query, chat_history=chat_history)
+                response = await self.llm.achat("Answer this question: " + query, chat_history=chat_history_store.get_all_memories())
                 await asyncio.sleep(2)
                 if self.callbacks:
                     self.callbacks.on_agent_end(self.name)

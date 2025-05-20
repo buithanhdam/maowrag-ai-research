@@ -15,18 +15,22 @@ def sanitize_json_string(s: str) -> str:
     # Loại bỏ ký tự control: ASCII từ 0 đến 31, ngoại trừ tab (09), newline (0A), carriage return (0D)
     return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
 def clean_json_response(response: str) -> str:
-    """Clean and extract JSON from LLM response"""
-    # Remove any markdown code block markers
-    response = response.replace("```json", "").replace("```", "").strip()
-        
-    # Find the first '{' and last '}'
-    start = response.find('{')
-    end = response.rfind('}')
-        
-    if start == -1 or end == -1:
-        raise ValueError("No valid JSON object found in response")   
-    # Extract just the JSON object
-    return response[start:end + 1]
+    """Clean JSON response from LLM output to make it parseable"""
+    # Extract JSON content if wrapped in markdown code blocks
+    if "```json" in response:
+        start = response.find("```json") + 7
+        end = response.find("```", start)
+        response = response[start:end].strip()
+    elif "```" in response:
+        start = response.find("```") + 3
+        end = response.find("```", start)
+        response = response[start:end].strip()
+    
+    # Remove any potential trailing commas before closing brackets/braces
+    response = response.replace(",]", "]").replace(",}", "}")
+    
+    return response
+    
 def batch_iterable(iterable, batch_size):
     """Yield successive batch_size-sized chunks from iterable."""
     it = iter(iterable)

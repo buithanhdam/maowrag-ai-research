@@ -12,11 +12,12 @@ async def test_reflection_async():
     
     reflection_agent = ReflectionAgent(llm, AgentOptions(
         name="Reflection Assistant",
-        description="Helps with information base on LLM"
-    ))
+        description="Helps with information base on LLM"),
+                                       tools=ToolManager.get_weather_tools()+ToolManager.get_search_tools()
+    )
     async with reflection_agent as agent:
         result = await agent.achat(
-            query="leonel messi most successful achievement in his career",
+            query="what is new movie by disney and it profit around the world?",
             verbose=1
         )
         print("reflection agent commplete: ",result)
@@ -66,4 +67,4 @@ async def test_planning_async():
 #         print("Manager agent commplete: ",response)
     
 if __name__ == "__main__":
-    asyncio.run(test_reflection_async())
+    asyncio.run(test_planning_async())

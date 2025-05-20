@@ -1,200 +1,336 @@
 import asyncio
-from typing import List, Any, Generator, Optional, AsyncGenerator, Union
+from typing import List, Any, Generator, Optional, AsyncGenerator, Dict, Tuple
 from llama_index.core.llms import ChatMessage
 from llama_index.core.tools import FunctionTool
+
 from src.llm import BaseLLM
-from src.agents.base import BaseAgent, AgentOptions
-from src.agents.design import ChatHistory
-
-
-BASE_GENERATION_SYSTEM_PROMPT = """
-Your task is to Generate the best content possible for the user's request.
-If the user provides critique, respond with a revised version of your previous attempt.
-You must always output the revised content.
-"""
-
-BASE_REFLECTION_SYSTEM_PROMPT = """
-You are tasked with generating critique and recommendations to the user's generated content.
-If the user content has something wrong or something to be improved, output a list of recommendations and critiques.
-If the user content is ok and there's nothing to change, output this: <OK>
-Utilize available tools if necessary to improve or validate the content.
-"""
+from ..base import BaseAgent
+from ..design import (
+    AgentOptions,
+    AgentCallbacks,
+    ChatMemory,
+    retry_on_error,
+)
 
 class ReflectionAgent(BaseAgent):
-    def __init__(self, llm: BaseLLM, options: AgentOptions, system_prompt:str = "", tools: List[FunctionTool] = []):
-        self.logger.debug("Initializing ReflectionAgent")
-        super().__init__(llm, options,system_prompt, tools)
+    """
+    Agent that uses a reflection process to iteratively improve content generation.
+    This implementation aligns better with PlanningAgent's structure while maintaining
+    the reflection-based approach.
+    """
 
-    def _extract_tool_recommendations(self, critique: str,  verbose:bool) -> List[tuple]:
+    def __init__(
+        self,
+        llm: BaseLLM,
+        options: AgentOptions,
+        system_prompt: str = "",
+        tools: List[FunctionTool] = [],
+        generation_prompt: str = None,
+        reflection_prompt: str = None,
+    ):
+        super().__init__(llm, options, system_prompt, tools)
+        self.generation_prompt = generation_prompt or self._get_default_generation_prompt()
+        self.reflection_prompt = reflection_prompt or self._get_default_reflection_prompt()
+        self._log_info(f"Initialized ReflectionAgent with {len(tools)} tools")
+
+    def _get_default_generation_prompt(self) -> str:
+        """Default prompt for the generation phase"""
+        return """
+        Your task is to generate the best content possible for the user's request.
+        If the user provides critique, respond with a revised version of your previous attempt.
+        You must always output the revised content based on the feedback provided.
+        Focus on making each iteration better than the last by addressing all feedback points.
         """
-        Extract tool recommendations from critique.
-        Looks for patterns like: "Use [tool_name] to [description]"
+
+    def _get_default_reflection_prompt(self) -> str:
+        """Default prompt for the reflection phase"""
+        return """
+        You are tasked with generating critique and recommendations to improve the content.
+        Analyze the content carefully and provide specific, actionable feedback.
+        If the content has issues or can be improved, output a numbered list of recommendations.
+        If the content is satisfactory and there's nothing to change, output this: <OK>
+        Be critical but constructive - focus on how to make the content better.
+        Utilize available tools if necessary to improve or validate the content.
+        """
+
+    def _extract_tool_recommendations(self, critique: str, verbose: bool = False) -> List[Tuple[str, str]]:
+        """
+        Extract tool recommendations from critique with improved pattern matching.
+        Looks for patterns indicating tool usage recommendations.
+        
+        Args:
+            critique: The critique text to analyze
+            verbose: Whether to log detailed information
+            
+        Returns:
+            List of tuples containing (tool_name, description)
         """
         tool_recommendations = []
+        
         if verbose:
-            self.logger.info(f"Extracting tool recommendations from critique: {critique}")
-        # Basic pattern matching for tool recommendations
+            self._log_info(f"Extracting tool recommendations from critique")
+        
+        # Check each tool name in the critique
         for tool_name in self.tools_dict.keys():
             if tool_name.lower() in critique.lower():
-                # Try to extract the description after the tool name
                 import re
-                match = re.search(rf"{tool_name}\s+to\s+(.+)", critique, re.IGNORECASE)
-                if match:
-                    tool_recommendations.append((tool_name, match.group(1)))
+                
+                # Try different patterns for tool recommendation extraction
+                patterns = [
+                    # "Use [tool_name] to [description]"
+                    rf"(?:use|utilize|apply|try)\s+{re.escape(tool_name)}\s+(?:to|for)\s+([^\.]+)",
+                    # "[tool_name] could [description]"
+                    rf"{re.escape(tool_name)}\s+(?:could|should|would|can|might)\s+([^\.]+)",
+                    # "Try [tool_name] [description]"
+                    rf"(?:try|consider|recommend)\s+{re.escape(tool_name)}\s+([^\.]+)",
+                ]
+                
+                for pattern in patterns:
+                    match = re.search(pattern, critique, re.IGNORECASE)
+                    if match:
+                        description = match.group(1).strip()
+                        tool_recommendations.append((tool_name, description))
+                        break
                 else:
-                    # Fallback recommendation
-                    tool_recommendations.append((tool_name, "Improve the content"))
+                    # Fallback if no pattern matched but tool name was mentioned
+                    tool_recommendations.append((tool_name, f"Improve the content using {tool_name}"))
+        
         if verbose:
-            self.logger.info(f"Tool recommendations extracted: {tool_recommendations}")
+            self._log_info(f"Extracted {len(tool_recommendations)} tool recommendations")
+            for tool, desc in tool_recommendations:
+                self._log_debug(f"Tool: {tool}, Description: {desc}")
+                
         return tool_recommendations
 
-    async def _agenerate_response(self, chat_history: List[ChatMessage],verbose: bool) -> str:
-        if verbose:
-            self.logger.debug("Generating async response")
-        try:
-            response = await self.llm.achat(query=chat_history[-1].content, chat_history=chat_history[:-1])
-            if verbose:
-                self.logger.info("Async response generated successfully")
-            return response
-        except Exception as e:
-            if verbose:
-                self.logger.error(f"Error generating response: {str(e)}")
-            raise
-
-    def _generate_response(self, chat_history: List[ChatMessage], verbose: bool) -> str:
-        if verbose:
-            self.logger.debug("Generating sync response")
-        try:
-            response = self.llm.chat(query=chat_history[-1].content, chat_history=chat_history[:-1])
-            if verbose:
-                self.logger.info("Sync response generated successfully")
-            return response
-        except Exception as e:
-            if verbose:
-                self.logger.error(f"Error generating response: {str(e)}")
-            raise
-
-    async def _agenerate(self, history: ChatHistory, verbose: bool = False) -> str:
-        if verbose:
-            self.logger.debug("Calling async generate")
-        return await self._agenerate_response(history.get_messages(), verbose)
-
-    def _generate(self, history: ChatHistory, verbose: bool = False) -> str:
-        if verbose:
-            self.logger.debug("Calling generate")
-        return self._generate_response(history.get_messages(), verbose)
-
-    async def _areflect(self, history: ChatHistory, verbose: bool = False) -> str:
-        if verbose:
-            self.logger.debug("Calling async reflect")
-        if self.tools:
-            history.get_messages()[-1].content += f"\nAvailable tools:\n{self._format_tool_signatures()}"
-        return await self._agenerate_response(history.get_messages(), verbose)
-
-    def _reflect(self, history: ChatHistory, verbose: bool = False) -> str:
-        if verbose:
-            self.logger.debug("Calling reflect")
-        if self.tools:
-            history.get_messages()[-1].content += f"\nAvailable tools:\n{self._format_tool_signatures()}"
-        return self._generate_response(history.get_messages(), verbose)
-
-
-    async def _aloop(
-        self,
-        generation_history: ChatHistory,
-        reflection_history: ChatHistory,
-        n_steps: int,
-        max_tool_steps: int,
+    async def _generate_content(
+        self, 
         verbose: bool = False
     ) -> str:
-        tool_steps_count = 0
-        final_generation = ""
-
-        for step in range(n_steps):
-            if verbose:
-                self.logger.info(f"Step {step + 1}/{n_steps}")
-
-            # Generate content
-            generation = await self._agenerate(generation_history, verbose=verbose)
-            generation_history.add("assistant", generation)
-            reflection_history.add("user", generation)
-
-            # Reflect on the generation
-            critique = await self._areflect(reflection_history, verbose=verbose)
-            
-            if "<OK>" in critique:
-                if verbose:
-                    self.logger.info("\nReflection complete - content is satisfactory\n")
-                final_generation = generation
-                break
-
-            # Check for tool recommendations in critique
-            tool_recommendations = self._extract_tool_recommendations(critique,verbose)
-            
-            for tool_name, tool_description in tool_recommendations:
-                if tool_steps_count < max_tool_steps:
-                    try:
-                        tool_result = await self._execute_tool(tool_name, tool_description,True)
-                        if not tool_result:
-                            critique += f"\nTool {tool_name} did not return any result"
-                        else:
-                            critique += f"\nTool {tool_name} result: {tool_result}"
-                        tool_steps_count += 1
-                    except Exception as e:
-                        critique += f"\nTool {tool_name} execution failed: {str(e)}"
-            generation_history.add("user", critique)
-            reflection_history.add("assistant", critique)
-            final_generation = generation
-            if verbose:
-                self.logger.info(f"Step {step + 1}/{n_steps} completed")
+        """Generate content based on the current generation history"""
         if verbose:
-            self.logger.info(f"\n\nFinal generation: {final_generation}\n\n")
-        return final_generation
+            self._log_info("Generating content")
+        
+        messages = self.chat_memory.get_long_memories()
+        if not messages:
+            self._log_error("No messages in generation history")
+            return "Error: No context for generation"
+        
+        try:
+            # Get the last user message
+            last_user_msg = next((msg for msg in reversed(messages) if msg.role == "user"), None)
+            if not last_user_msg:
+                self._log_warning("No user message found in history")
+                return "Error: No user query found"
+            
+            # Use all messages as context but generate based on last user message
+            response = await self.llm.achat(
+                query=last_user_msg.content, 
+                chat_history=messages[:-1] if messages[-1].role == "user" else messages
+            )
+            
+            if verbose:
+                response_preview = f"{response[:100]}..." if len(response) > 100 else response
+                self._log_info(f"Generated content: {response_preview}")
+                
+            return response
+            
+        except Exception as e:
+            self._log_error(f"Error in content generation: {str(e)}")
+            raise
 
-    # Implement the required methods from BaseAgent
+    async def _reflect_on_content(
+        self, 
+        content: str,
+        available_tools: List[str] = None,
+        verbose: bool = False
+    ) -> str:
+        """Generate critique and feedback on the provided content"""
+        if verbose:
+            self._log_info("Reflecting on content")
+            
+        try:
+            # Add the content to be reflected upon
+            reflection_msg = f"Please review and critique the following content:\n\n{content}"
+            
+            # Add tools information if available
+            if available_tools:
+                tools_info = "\n\nAvailable tools for verification or improvement:\n"
+                tools_info += self._format_tool_signatures()
+                reflection_msg += tools_info
+            
+            # Add the reflection prompt
+            self.chat_memory.add_short_memory("user", reflection_msg)
+            
+            # Generate the critique
+            critique = await self.llm.achat(
+                query=reflection_msg,
+                chat_history=self.chat_memory.get_short_memories()[:-1]
+            )
+            
+            if verbose:
+                critique_preview = f"{critique[:100]}..." if len(critique) > 100 else critique
+                self._log_info(f"Generated critique: {critique_preview}")
+                
+            return critique
+            
+        except Exception as e:
+            self._log_error(f"Error in reflection: {str(e)}")
+            raise
+
+    async def _apply_tool_improvements(
+        self,
+        query: str,
+        critique: str,
+        max_tool_steps: int = 2,
+        verbose: bool = False
+    ) -> Dict[str, Any]:
+        """Apply tool-based improvements based on the critique"""
+        tool_results = {}
+        tool_recommendations = self._extract_tool_recommendations(critique, verbose)
+        
+        if not tool_recommendations:
+            if verbose:
+                self._log_info("No tool recommendations identified in critique")
+            return tool_results
+            
+        tool_count = 0
+        for tool_name, description in tool_recommendations:
+            if tool_count >= max_tool_steps:
+                if verbose:
+                    self._log_info(f"Reached maximum tool steps ({max_tool_steps})")
+                break
+                
+            if tool_name not in self.tools_dict:
+                self._log_warning(f"Recommended tool '{tool_name}' not found in available tools")
+                continue
+                
+            if verbose:
+                self._log_info(f"Applying tool: {tool_name} for: {description}")
+                
+            result = await self._execute_tool(
+                task=query,
+                tool_name=tool_name,
+                description=description,
+                requires_tool=True
+            )
+            
+            tool_results[tool_name] = result
+            tool_count += 1
+            
+        return tool_results
+
+    def _format_critique_with_tool_results(
+        self, 
+        critique: str, 
+        tool_results: Dict[str, Any]
+    ) -> str:
+        """Format the critique with tool results for better context in next generation"""
+        if not tool_results:
+            return critique
+            
+        formatted_critique = critique + "\n\nTool Results:\n"
+        for tool_name, result in tool_results.items():
+            result_str = str(result)
+            # Truncate very long results for readability
+            if len(result_str) > 500:
+                result_str = result_str[:500] + "... [truncated]"
+                
+            formatted_critique += f"\n- {tool_name}: {result_str}"
+            
+        return formatted_critique
+
+    @retry_on_error()
     async def run(
         self,
         query: str,
-        n_steps: int = 3,
+        n_iterations: int = 2,
         max_tool_steps: int = 2,
         verbose: bool = False,
         chat_history: List[ChatMessage] = []
     ) -> str:
-        # Initialize system prompts
-        full_gen_prompt = self.system_prompt + "\n"  + BASE_GENERATION_SYSTEM_PROMPT
-        full_ref_prompt = self.system_prompt + "\n"  + BASE_REFLECTION_SYSTEM_PROMPT
-
-        # Initialize chat histories
-        generation_history = ChatHistory(
-            initial_messages=[
-                self._create_system_message(full_gen_prompt),
-                ChatMessage(role="user", content=query)
-            ],
-            max_length=3
+        """
+        Run the reflection-based content generation process
+        
+        Args:
+            query: The user's query/request
+            n_iterations: Maximum number of reflection-generation cycles
+            max_tool_steps: Maximum number of tool executions per iteration
+            verbose: Whether to log detailed information
+            chat_history: Previous conversation history
+            
+        Returns:
+            The final generated content after reflection iterations
+        """
+        if verbose:
+            self._log_info(f"Starting reflection process for query: {query}")
+        
+        # Initialize chat histories with system prompts
+        self.chat_memory.set_initial_long_memories(
+            [self._create_system_message(self.system_prompt + "\n" + self.generation_prompt),]+chat_history
         )
+        
+        self.chat_memory.add_short_memory("system",str(self.system_prompt + "\n" + self.reflection_prompt))
 
-        reflection_history = ChatHistory(
-            initial_messages=[self._create_system_message(full_ref_prompt)],
-            max_length=3
-        )
+        # Add the current query
+        self.chat_memory.add_long_memory("user", query)
+        
+        # Initialize tracking variables
+        current_iteration = 0
+        content = None
+        final_content = None
+        
+        # Main reflection loop
+        while current_iteration < n_iterations:
+            current_iteration += 1
+            if verbose:
+                self._log_info(f"Starting iteration {current_iteration}/{n_iterations}")
+            
+            # Generate content
+            content = await self._generate_content(verbose)
+            if not content:
+                self._log_error("Failed to generate content")
+                break
+                
+            # Store content for next reflection
+            self.chat_memory.add_long_memory("assistant", content)
+            final_content = content  # Store this as potential final output
+            
+            # Generate critique/reflection
+            critique = await self._reflect_on_content(
+                content, 
+                [tool.metadata.name for tool in self.tools], 
+                verbose
+            )
+            
+            # Check if content is satisfactory
+            if "<OK>" in critique:
+                if verbose:
+                    self._log_info("Content deemed satisfactory, ending reflection process")
+                break
+                
+            # Apply tool improvements
+            tool_results = await self._apply_tool_improvements(
+                query,
+                critique,
+                max_tool_steps,
+                verbose
+            )
+            
+            # Format critique with tool results
+            enhanced_critique = self._format_critique_with_tool_results(critique, tool_results)
+            
+            # Add critique to generation history for next iteration
+            self.chat_memory.add_long_memory("user", enhanced_critique)
+            self.chat_memory.add_short_memory("assistant", critique)
+            
+            if verbose:
+                self._log_info(f"Completed iteration {current_iteration}")
+        
+        if verbose:
+            self._log_info("Reflection process complete")
+            
+        return final_content or "Failed to generate content"
 
-        # Incorporate existing chat history if provided
-        if chat_history:
-            for msg in chat_history:
-                if msg.role == "user":
-                    generation_history.add("user", msg.content)
-                elif msg.role == "assistant":
-                    generation_history.add("assistant", msg.content)
-
-        return await self._aloop(
-            generation_history,
-            reflection_history,
-            n_steps,
-            max_tool_steps,
-            verbose
-        )
-
-    # Implement BaseAgent abstract methods
     async def achat(
         self,
         query: str,
@@ -203,25 +339,29 @@ class ReflectionAgent(BaseAgent):
         *args,
         **kwargs
     ) -> str:
+        """Async chat interface for the reflection agent"""
         # Get additional parameters or use defaults
-        n_steps = kwargs.get("n_steps", 3)
+        n_iterations = kwargs.get("n_iterations", 2)
         max_tool_steps = kwargs.get("max_tool_steps", 2)
 
         if self.callbacks:
             self.callbacks.on_agent_start(self.name)
 
-        result = await self.run(
-            query=query,
-            n_steps=n_steps,
-            max_tool_steps=max_tool_steps,
-            verbose=verbose,
-            chat_history=chat_history
-        )
+        try:
+            # Run the reflection process
+            result = await self.run(
+                query=query,
+                n_iterations=n_iterations,
+                max_tool_steps=max_tool_steps,
+                verbose=verbose,
+                chat_history=chat_history,
+            )
 
-        if self.callbacks:
-            self.callbacks.on_agent_end(self.name)
+            return result
 
-        return result
+        finally:
+            if self.callbacks:
+                self.callbacks.on_agent_end(self.name)
 
     def chat(
         self,
@@ -231,6 +371,7 @@ class ReflectionAgent(BaseAgent):
         *args,
         **kwargs
     ) -> str:
+        """Synchronous chat interface for the reflection agent"""
         # Create an event loop if one doesn't exist
         try:
             loop = asyncio.get_event_loop()
@@ -257,8 +398,9 @@ class ReflectionAgent(BaseAgent):
         *args,
         **kwargs
     ) -> AsyncGenerator[str, None]:
+        """Async streaming chat interface for the reflection agent"""
         # Get parameters
-        n_steps = kwargs.get("n_steps", 3)
+        n_iterations = kwargs.get("n_iterations", 2)
         max_tool_steps = kwargs.get("max_tool_steps", 2)
         chat_history = chat_history or []
 
@@ -266,24 +408,29 @@ class ReflectionAgent(BaseAgent):
             self.callbacks.on_agent_start(self.name)
 
         try:
-            # First perform the reflection loop to get the final content
+            # First perform the reflection process to get the final content
             final_content = await self.run(
                 query=query,
-                n_steps=n_steps,
+                n_iterations=n_iterations,
                 max_tool_steps=max_tool_steps,
                 verbose=verbose,
                 chat_history=chat_history
             )
             
-            # If no final polish, just yield the final content in chunks
-            # This simulates streaming for consistency
-            chunk_size = 5  # Adjust as needed
+            # Simulate streaming for better UX
+            chunk_size = 5 
             for i in range(0, len(final_content), chunk_size):
                 chunk = final_content[i:i+chunk_size]
                 yield chunk
                 await asyncio.sleep(0.01)  # Small delay to simulate streaming
+                
+                # If there's a token callback, use it
+                if self.callbacks and hasattr(self.callbacks, 'on_llm_new_token'):
+                    self.callbacks.on_llm_new_token(chunk)
+                    
         except Exception as e:
-            raise e           
+            self._log_error(f"Error in astream_chat: {str(e)}")
+            yield f"Error: {str(e)}"
         finally:
             if self.callbacks:
                 self.callbacks.on_agent_end(self.name)
@@ -296,6 +443,7 @@ class ReflectionAgent(BaseAgent):
         *args,
         **kwargs
     ) -> Generator[str, None, None]:
+        """Synchronous streaming chat interface for the reflection agent"""
         # Create an event loop if one doesn't exist
         try:
             loop = asyncio.get_event_loop()

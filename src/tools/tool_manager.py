@@ -119,5 +119,5 @@ class ToolManager:
         return (
             ToolManager.get_search_tools()
             + ToolManager.get_calculator_tools()
-            + ToolManager.get_weather_tool()+ ToolManager.get_rag_tool()
+            + ToolManager.get_weather_tools()+ ToolManager.get_rag_tools()
         )
