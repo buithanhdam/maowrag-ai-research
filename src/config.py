@@ -12,8 +12,6 @@ SUPPORTED_FILE_EXTENSIONS = [
     ".docx",
     ".html",
     ".txt",
-    ".csv",
-    ".xlsx",
     ".json",
     # ".pptx",
     ".md",
@@ -21,7 +19,20 @@ SUPPORTED_FILE_EXTENSIONS = [
     ".mbox",
     ".xml",
     ".rtf",
-    
+]
+SUPPORTED_MEDIA_FILE_EXTENSIONS = [
+    ".wav",
+    ".mp3",
+    ".m4a",
+    ".mp4",
+    ".jpg",
+    ".jpeg",
+    ".png",
+]
+SUPPORTED_EXCEL_FILE_EXTENSIONS = [
+    ".xlsx",
+    ".xls",
+    ".csv",
 ]
 ACCEPTED_MIME_MEDIA_TYPE_PREFIXES = [
     "audio/wav",
@@ -33,15 +44,6 @@ ACCEPTED_MIME_MEDIA_TYPE_PREFIXES = [
     "image/png",
 ]
 
-SUPPORTED_MEDIA_FILE_EXTENSIONS = [
-    ".wav",
-    ".mp3",
-    ".m4a",
-    ".mp4",
-    ".jpg",
-    ".jpeg",
-    ".png"
-]
 
 class RAGType(enum.Enum):
     NORMAL = "normal_rag"
@@ -51,14 +53,14 @@ class RAGType(enum.Enum):
     HYDE = "hyde_rag"
     NAIVE = "naive_rag"
     
-class LLMType(enum.Enum):
-    GEMINI = "gemini"
+class LLMProviderType(enum.Enum):
+    GOOGLE = "google"
     OPENAI = "openai"
     CLAUDE = "claude" 
      
 class LLMConfig(BaseModel):
     api_key: str
-    model_name: LLMType
+    model_name: LLMProviderType
     model_id: str
     temperature: float = 0.7
     max_tokens: int = 2048
@@ -82,7 +84,7 @@ class QdrantPayload(BaseModel):
 class Config:
     OPENAI_CONFIG = LLMConfig(
         api_key=os.environ.get('OPENAI_API_KEY'),
-        model_name=LLMType.OPENAI,
+        model_name=LLMProviderType.OPENAI,
         model_id="gpt-3.5-turbo",
         temperature=0.7,
         max_tokens= 2048,
@@ -91,7 +93,7 @@ class Config:
 
     GEMINI_CONFIG = LLMConfig(
         api_key=os.environ.get('GOOGLE_API_KEY'),
-        model_name=LLMType.GEMINI,
+        model_name=LLMProviderType.GOOGLE,
         model_id="models/gemini-2.0-flash",
         temperature=0.8,
         max_tokens = 2048,
@@ -99,7 +101,7 @@ class Config:
     )
     CLAUDE_CONFIG = LLMConfig(
         api_key=os.environ.get('ANTHROPIC_API_KEY'),
-        model_name=LLMType.CLAUDE,
+        model_name=LLMProviderType.CLAUDE,
         model_id="claude-3-haiku-20240307",
         temperature=0.7,
         max_tokens=4000,
@@ -109,12 +111,12 @@ class Config:
     RAG_CONFIG: RAGConfig = RAGConfig()
 
 global_config = Config()
-def get_llm_config(llm_type: LLMType) -> LLMConfig:
-    if llm_type == LLMType.OPENAI:
+def get_llm_config(llm_type: LLMProviderType) -> LLMConfig:
+    if llm_type == LLMProviderType.OPENAI:
         return global_config.OPENAI_CONFIG
-    elif llm_type == LLMType.GEMINI:
+    elif llm_type == LLMProviderType.GOOGLE:
         return global_config.GEMINI_CONFIG
-    elif llm_type == LLMType.CLAUDE:
+    elif llm_type == LLMProviderType.CLAUDE:
         return global_config.CLAUDE_CONFIG
     else:
         raise ValueError(f"Unsupported LLM type: {llm_type}")

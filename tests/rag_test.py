@@ -1,6 +1,6 @@
 from src.readers import FileExtractor, parse_multiple_files
 from src.rag.rag_manager import RAGManager
-from src.config import RAGType, LLMType, global_config
+from src.config import RAGType, LLMProviderType, global_config
 from src.db.qdrant import QdrantVectorDatabase
 import dotenv
 import os 
@@ -10,7 +10,7 @@ dotenv.load_dotenv()
 if __name__ == "__main__":
     # Example usage
     collection_name="test_collection"
-    file = "tests/test_data/vantage-logistics-vietnam.jpg"
+    file = "tests/test_data/test-vlc.pdf"
     file_id = str(uuid.uuid4())
     
     file_extractor = FileExtractor()
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     rag_manager = RAGManager.create_rag(
         rag_type=RAGType.NAIVE,
         vector_db_url=global_config.QDRANT_URL,
-        llm_type=LLMType.GEMINI,
+        llm_type=LLMProviderType.GOOGLE,
     )
     
     qdrant_db.create_collection(collection_name=collection_name)

@@ -1,10 +1,10 @@
 import asyncio
-from src.llm import UnifiedLLM
+from src.llm import BaseLLM
 from llama_index.core.llms import ChatMessage
-from src.config import LLMType
+from src.config import LLMProviderType
 async def test_gemini_achat():
     try:
-        llm = UnifiedLLM(model_name=LLMType.GEMINI)
+        llm = BaseLLM(provider=LLMProviderType.GOOGLE)
         response = await llm.achat("Xin chào!")
         print("=== Chat đơn giản ===")
         print(f"Response: {response}")
@@ -23,7 +23,7 @@ async def test_gemini_achat():
 
 async def test_gemini_astream():
     try:
-        llm = UnifiedLLM(model_name=LLMType.GEMINI)
+        llm = BaseLLM(provider=LLMProviderType.GOOGLE)
         
         # response = await llm.achat("Xin chào!")
         # print("\n=== Async chat ===")
@@ -43,4 +43,4 @@ async def test_gemini_astream():
 
 if __name__ == "__main__":
     # test_gemini_sync()
-    asyncio.run(test_gemini_achat())
+    asyncio.run(test_gemini_astream())

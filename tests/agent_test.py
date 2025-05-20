@@ -1,18 +1,16 @@
 import asyncio
 from src.agents import (ReflectionAgent,
-                        ReActAgent,
-                        AgentOptions,
-                        ManagerAgent)
-from src.tools import get_weather_tool,search_web_tool
-from src.llm import UnifiedLLM
-from src.config import LLMType, global_config
+                        PlanningAgent,
+                        AgentOptions)
+from src.tools import ToolManager
+from src.llm import BaseLLM
+from src.config import LLMProviderType, global_config
 
 
 async def test_reflection_async():
-    llm= UnifiedLLM(model_name=LLMType.GEMINI)
+    llm = BaseLLM(provider=LLMProviderType.GOOGLE)
     
     reflection_agent = ReflectionAgent(llm, AgentOptions(
-        id="reflection1",
         name="Reflection Assistant",
         description="Helps with information base on LLM"
     ))
@@ -25,12 +23,12 @@ async def test_reflection_async():
 async def test_planning_async():
     # Initialize agent
         # Create tools
-    llm= UnifiedLLM(model_name=LLMType.GEMINI)
-    planning_agent = ReActAgent(llm, AgentOptions(
+    llm = BaseLLM(provider=LLMProviderType.GOOGLE)
+    planning_agent = PlanningAgent(llm, AgentOptions(
         id="react1",
         name="Planning Assistant",
         description="Assists with project planning, task breakdown, and weather information"
-    ),tools=[get_weather_tool,search_web_tool])
+    ),tools=ToolManager.get_weather_tools()+ToolManager.get_search_tools())
     
     async with planning_agent as agent:
         result = await agent.achat(
@@ -39,33 +37,33 @@ async def test_planning_async():
         )
         print("Planning agent commplete: ",result)
 
-async def test_manager_agent():
-    llm= UnifiedLLM(model_name=LLMType.GEMINI)
+# async def test_manager_agent():
+#     llm= UnifiedLLM(model_name=LLMType.GEMINI)
     
-    reflection_agent = ReflectionAgent(llm, AgentOptions(
-        id="reflection1",
-        name="Reflection Assistant",
-        description="Helps with information base on LLM"
-    ))
+#     reflection_agent = ReflectionAgent(llm, AgentOptions(
+#         id="reflection1",
+#         name="Reflection Assistant",
+#         description="Helps with information base on LLM"
+#     ))
     
-    planning_agent = ReActAgent(llm, AgentOptions(
-        id="react1",
-        name="Planning Assistant",
-        description="Assists with project planning, task breakdown, and weather information"
-    ),tools=[get_weather_tool])
+#     planning_agent = ReActAgent(llm, AgentOptions(
+#         id="react1",
+#         name="Planning Assistant",
+#         description="Assists with project planning, task breakdown, and weather information"
+#     ),tools=[get_weather_tool])
     
     
-    async with ManagerAgent(llm, AgentOptions(
-        name="Manager",
-        description="Routes requests to specialized agents"
-    )) as manager:
-        manager.register_agent(reflection_agent)
-        manager.register_agent(planning_agent)
-        response = await manager.achat(
-            query="Can you help me about today weather?",
-            verbose=True
-        )
-        print("Manager agent commplete: ",response)
+#     async with ManagerAgent(llm, AgentOptions(
+#         name="Manager",
+#         description="Routes requests to specialized agents"
+#     )) as manager:
+#         manager.register_agent(reflection_agent)
+#         manager.register_agent(planning_agent)
+#         response = await manager.achat(
+#             query="Can you help me about today weather?",
+#             verbose=True
+#         )
+#         print("Manager agent commplete: ",response)
     
 if __name__ == "__main__":
-    asyncio.run(test_planning_async())
+    asyncio.run(test_reflection_async())

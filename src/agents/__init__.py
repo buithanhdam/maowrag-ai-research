@@ -1,9 +1,7 @@
-from .react_agent import ReActAgent
-from .reflection_agent import ReflectionAgent
-from .base import BaseAgent, AgentOptions
-from .manager_agent import ManagerAgent
+from .base import BaseAgent
+from .design import AgentOptions
+from .single import PlanningAgent,ReflectionAgent
+from .multi import ParallelAgent, RouterAgent
 __all__ = [
-    "ReActAgent", 
-    "ReflectionAgent","BaseAgent", "AgentOptions","ManagerAgent"
+    "BaseAgent","PlanningAgent","ReflectionAgent","ParallelAgent", "RouterAgent","AgentOptions"
 ]
-
