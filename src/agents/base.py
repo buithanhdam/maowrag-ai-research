@@ -36,7 +36,7 @@ class BaseAgent(ABC):
         self.system_prompt = self.llm._get_system_prompt()
         self.name = options.name
         self.description = options.description
-        self.id = options.id or self._generate_id_from_name(self.name )
+        self.id = options.id or self._generate_id_from_name(self.name)
         self.region = options.region
         self.save_chat = options.save_chat
         self.callbacks = options.callbacks or AgentCallbacks()
@@ -45,7 +45,8 @@ class BaseAgent(ABC):
         self.tools_dict = {tool.metadata.name: tool for tool in tools}
         self.logger = get_formatted_logger(__file__)
         self.chat_memory = ChatMemory()
-    @staticmethod        
+
+    @staticmethod
     def _generate_id_from_name(name: str) -> str:
         import re
 
@@ -53,6 +54,33 @@ class BaseAgent(ABC):
         key = re.sub(r"[^a-zA-Z\s-]", "", name)
         key = re.sub(r"\s+", "-", key)
         return key.lower()
+
+    def _get_config(self) -> dict[str, Any]:
+        """Get detailed config of the agent"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "id": self.id,
+            "llm": self.llm._get_model_config(),
+            "structured_output": self.structured_output,
+        }
+
+    def _log_info(self, message: str) -> None:
+        self.logger.info(f"[Agent: {self.name}] - [ID: {self.id}] - {message}")
+
+    def _log_error(self, message: str) -> None:
+        self.logger.error(f"[Agent: {self.name}] - [ID: {self.id}] - {message}")
+
+    def _log_debug(self, message: str) -> None:
+        self.logger.debug(f"[Agent: {self.name}] - [ID: {self.id}] - {message}")
+
+    def _log_warning(self, message: str) -> None:
+        self.logger.warning(f"[Agent: {self.name}] - [ID: {self.id}] - {message}")
+
+    def _create_system_message(self, prompt: str) -> ChatMessage:
+        """Create a system message with the given prompt"""
+        return ChatMessage(role="system", content=prompt)
+
     def _get_output_schema(self) -> str:
         """Get JSON schema of output model if available"""
         if not self.structured_output:
@@ -66,6 +94,7 @@ class BaseAgent(ABC):
         except Exception as e:
             self.logger.error(f"Error getting output schema: {str(e)}")
             return "[No specific output schema]."
+
     @retry_on_json_parse_error()
     async def _output_parser(
         self,
@@ -77,7 +106,7 @@ class BaseAgent(ABC):
                 output_parser=PydanticOutputParser(output_cls=self.structured_output),
                 llm=self.llm._get_model(),
                 prompt_template_str=output,
-                verbose=True
+                verbose=True,
             )
 
             parsed_output = program()
@@ -85,43 +114,30 @@ class BaseAgent(ABC):
             if isinstance(parsed_output, BaseModel):
                 final_output = parsed_output.model_dump_json()
             else:
-                self.logger.warning(f"⚠️ Unexpected output type: {type(parsed_output)}. Attempting to clean.")
+                self.logger.warning(
+                    f"⚠️ Unexpected output type: {type(parsed_output)}. Attempting to clean."
+                )
                 final_output = clean_json_response(str(parsed_output))
 
         except Exception as e:
             self.logger.error(f"❌ Parsing failed: {str(e)}. Fallback to raw LLM call.")
             try:
                 structured_schema_prompt = f"""{output}\nIf an output schema was provided, please ensure your response conforms to this structure:\n{self._get_output_schema()}"""
-                fallback_output = await self.llm.achat(query=structured_schema_prompt, chat_history=self.chat_memory.get_all_memories())
+                fallback_output = await self.llm.achat(
+                    query=structured_schema_prompt,
+                    chat_history=self.chat_memory.get_all_memories(),
+                )
                 fallback_output = clean_json_response(fallback_output)
-                final_output = self.structured_output.model_validate_json(fallback_output).model_dump_json()
+                final_output = self.structured_output.model_validate_json(
+                    fallback_output
+                ).model_dump_json()
             except Exception as e:
-                self.logger.error(f"❌ Fallback parsing failed: {str(e)}. Returning raw fallback output.")
+                self.logger.error(
+                    f"❌ Fallback parsing failed: {str(e)}. Returning raw fallback output."
+                )
                 final_output = fallback_output
 
         return final_output
-   
-    def _get_config(self) -> dict[str, Any]:
-        """Get detailed config of the agent"""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "id": self.id,
-            "llm": self.llm._get_model_config(),
-            "structured_output": self.structured_output,
-        }
-    def _log_info(self, message: str) -> None:
-        self.logger.info(f"[Agent: {self.name}] - [ID: {self.id}] - {message}")
-    def _log_error(self, message: str) -> None:
-        self.logger.error(f"[Agent: {self.name}] - [ID: {self.id}] - {message}")
-    def _log_debug(self, message: str) -> None:
-        self.logger.debug(f"[Agent: {self.name}] - [ID: {self.id}] - {message}")
-    def _log_warning(self, message: str) -> None:
-        self.logger.warning(f"[Agent: {self.name}] - [ID: {self.id}] - {message}")
-    
-    def _create_system_message(self, prompt: str) -> ChatMessage:
-        """Create a system message with the given prompt"""
-        return ChatMessage(role="system", content=prompt)
 
     def _format_tool_signatures(self) -> str:
         """Format all tool signatures into a string format LLM can understand"""
@@ -145,29 +161,17 @@ class BaseAgent(ABC):
 
         return "\n".join(tool_descriptions)
 
-    async def _execute_tool(
+    async def _argument_parser(
         self,
         task: str,
         tool_name: str,
-        description: str,
-        requires_tool: bool,
+        tool: FunctionTool,
+        verbose: bool = False,
     ) -> Optional[Any]:
-        """Execute a tool with better error handling and context-awareness"""
-        if not requires_tool or not tool_name:
-            return None
-
-        tool = self.tools_dict.get(tool_name)
-        if not tool:
-            self._log_warning(f"Attempted to execute non-existent tool: {tool_name}")
-            return None
-
         prompt = f"""
-        User Query: {task}
-        
-        Current Step Description: {description}
-        
-        Based on the User Query, the Current Step Description, and the Context from Previously Completed Steps, you need to generate the EXACT parameters to call the tool '{tool_name}'.
-        
+        User task context: {task}
+        Based on the User Task you need to generate the EXACT parameters to call the tool '{tool_name}'.
+        Prioritize information from the context if it directly relates to the required parameters.
         Tool: {tool_name}
         Tool description: {tool.metadata.description}
         
@@ -176,11 +180,11 @@ class BaseAgent(ABC):
         
         Important rules for generating parameters:
         1. ONLY generate parameters that are part of the 'Tool specification'.
-        2. Ensure the parameter values match the expected data types and formats.
-        3. Extract necessary information from the 'User Query' and 'Context from Previously Completed Steps'.
+        2. Ensure the parameter values strictly match the expected data types and formats.
+        3. Extract necessary information from the 'User task context'.
         4. If a parameter is optional and not needed, omit it.
-        5. If a required parameter cannot be determined from the provided information, use a placeholder like "[UNDEFINED_PARAMETER]" but try your best to infer. (Ideally, the planning phase should prevent this).
-        
+        5. If a required parameter cannot be confidently determined, use a placeholder like "[UNDEFINED_PARAMETER]" and explain why.
+
         Response format:
         {{
             "arguments": {{
@@ -188,28 +192,114 @@ class BaseAgent(ABC):
             }}
         }}
         """
-        result = None
         try:
-            self._log_info(f"Generating arguments for tool '{tool_name}'...")
+            if verbose:
+                self._log_debug(f"Generating arguments for tool '{tool_name}'...")
 
-            response = await self.llm.achat(query=prompt, chat_history=self.chat_memory.get_all_memories() or None)
-            
+            response = await self.llm.achat(
+                query=prompt, chat_history=self.chat_memory.get_short_memories()
+            )
+
             response = clean_json_response(response)
             params = json.loads(response)
 
             if "arguments" not in params or not isinstance(params["arguments"], dict):
-                raise ValueError("LLM did not return arguments in the expected format: {'arguments': {...}}")
+                raise ValueError(
+                    "LLM did not return arguments in the expected format: {'arguments': {...}}"
+                )
 
-            self._log_info(f"Calling tool '{tool_name}' with arguments: {params['arguments']}")
-            result = await tool.acall(**params["arguments"])
-            self._log_info(f"Tool '{tool_name}' executed. Result: {str(result)[:200]}...")
-            return result
-
+            return params
         except Exception as e:
-            self._log_error(f"Error generating arguments or executing tool '{tool_name}': {str(e)}")
+            if verbose:
+                self._log_error(
+                    f"An unexpected error occurred while generating arguments for tool '{tool_name}': {str(e)}"
+                )
+            return None
+
+    async def _execute_tool(
+        self,
+        task: str,
+        tool_name: str,
+        requires_tool: bool,
+        verbose: bool = False,
+    ) -> Optional[Any]:
+        """Execute a tool with better error handling and context-awareness"""
+        if not requires_tool or not tool_name:
+            return None
+        tool = self.tools_dict.get(tool_name)
+        if not tool:
+            if verbose:
+                self._log_warning(
+                    f"Attempted to execute non-existent tool: {tool_name}"
+                )
+            return None
+        result = None
+        try:
+            params = await self._argument_parser(task, tool_name, tool, verbose)
+            if params and "arguments" in params:
+                if verbose:
+                    self._log_debug(
+                        f"Executing tool '{tool_name}' with arguments: {params['arguments']}"
+                    )
+                result = await tool.acall(**params["arguments"])
+                if verbose:
+                    self._log_info(
+                        f"Tool '{tool_name}' executed. Result: {str(result)[:200]}..."
+                    )
+                return result
+            else:
+                self._log_warning(
+                    f"Could not generate valid arguments for tool '{tool_name}'. Skipping execution."
+                )
+                return result
+        except Exception as e:
+            if verbose:
+                self._log_error(
+                    f"Error generating arguments or executing tool '{tool_name}': {str(e)}"
+                )
             if requires_tool:
                 raise
             return result
+
+    async def _generate_final_response(
+        self,
+        query: str,
+        verbose: bool,
+    ) -> str:
+        """Generate a coherent final response of the results"""
+
+        FINAL_RESPONSE_PROMPT = f"""\
+        You are a helpful assistant whose role is to synthesize the information gathered from previous tasks to provide a comprehensive and concise answer to the user's query.
+        User query: {query}
+        Task Results: {self.chat_memory.get_short_memories()}
+        Answer the user's query directly using the information provided in the Task Results.
+        Be concise and ensure all critical information is included in your response.
+        Do not include any introductory just answer normalization response.
+        """
+
+        if verbose:
+            self._log_debug("Generating final_response...")
+
+        try:
+            # Make sure self._output_parser is defined in BaseAgent
+            if not self.structured_output:
+                result = await self.llm.achat(
+                    query=FINAL_RESPONSE_PROMPT,
+                    chat_history=self.chat_memory.get_long_memories(),
+                )
+            else:
+                result = await self._output_parser(output=FINAL_RESPONSE_PROMPT)
+            if verbose:
+                self._log_info(
+                    f"Final response generated successfully with final result: {result[:100]}..."
+                    if len(str(result)) > 100
+                    else f"Final response generated successfully with final result: {result}."
+                )
+            return result
+        except Exception as e:
+            if verbose:
+                self._log_error(f"Error generating summary: {str(e)}")
+            raise e
 
     @abstractmethod
     def chat(

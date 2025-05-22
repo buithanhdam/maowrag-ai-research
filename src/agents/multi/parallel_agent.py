@@ -1,4 +1,4 @@
-from typing import Any, AsyncGenerator, Dict, Generator, List
+from typing import Any, AsyncGenerator, Dict, Generator, List, Optional
 import asyncio
 from llama_index.core.llms import ChatMessage
 from llama_index.core.tools import FunctionTool
@@ -7,221 +7,141 @@ from src.llm import BaseLLM
 from .base import BaseMultiAgent
 from ..design import (
     AgentOptions,
-    ExecutionPlan,
-    PlanStep,
-    ChatMemory,
     retry_on_error,
 )
-from ..base import BaseAgent
 
-
-INTEGRATION_PROMPT = """\
-You are responsible for combining outputs from multiple specialized agents into a coherent response.
-Each agent has provided structured data related to its expertise domain.
-
-Your task is to synthesize this information into a comprehensive response that addresses the original query.
-
-Original User Query: {user_query}
-
-Agent Outputs:
-{agent_outputs}
-
-Please provide a comprehensive response that integrates all the information from the specialized agents.
-Be concise and ensure all critical information is included.
-"""
 
 class ParallelAgent(BaseMultiAgent):
     """ParallelAgent that executes multiple agents in parallel and combines their results"""
-    
+
     def __init__(
-        self, 
-        llm: BaseLLM, 
-        options: AgentOptions, 
-        system_prompt: str = "", 
+        self,
+        llm: BaseLLM,
+        options: AgentOptions,
+        system_prompt: str = "",
         tools: List[FunctionTool] = [],
         validation_threshold: float = 0.7,
     ):
         super().__init__(llm, options, system_prompt, tools, validation_threshold)
-    
+
     async def _execute_parallel(
-        self,
-        query: str,
-        agents_to_execute: List[BaseAgent],
-        chat_history: ChatMemory,
-        verbose: bool = False,
-        additional_params: Dict[str, Any] = {}
-    ) -> Dict[str, Any]:
+        self, query: str, verbose: bool = False, *args, **kwargs
+    ) -> bool:
         """Execute multiple agents in parallel and collect their results"""
+
+        agents_to_execute = list(self.agent_registry.values())
         if verbose:
-            self._log_info(f"Executing {len(agents_to_execute)} agents in parallel")
-            
+            self._log_debug(f"Executing {len(agents_to_execute)} agents in parallel")
+
         # Create tasks for each agent
         tasks = []
         for agent in agents_to_execute:
             if verbose:
-                self._log_info(f"Creating task for agent: {agent.name}")
+                self._log_debug(f"Creating task for agent: {agent.name}")
             task = asyncio.create_task(
                 agent.achat(
                     query=query,
                     verbose=verbose,
-                    chat_history=chat_history.get_all_memories(),
-                    **additional_params
+                    chat_history=self.chat_memory.get_long_memories(),
+                    *args,
+                    **kwargs,
                 )
             )
             tasks.append((agent.name, task))
-            
-        # Wait for all tasks to complete
-        results = {}
+
         for agent_name, task in tasks:
             try:
                 result = await task
-                results[agent_name] = result
+                self.chat_memory.add_short_memory(
+                    "assistant",
+                    f"Agent: {agent_name} process successfully with result: {result}",
+                )
                 if verbose:
                     self._log_info(f"Agent {agent_name} completed successfully")
             except Exception as e:
                 self._log_error(f"Error executing agent {agent_name}: {str(e)}")
-                results[agent_name] = f"Error: {str(e)}"
-                
-        return results
-    
-    async def _integrate_results(
-        self,
-        query: str,
-        agent_results: Dict[str, Any],
-        chat_history: List[ChatMessage] = [],
-        verbose: bool = False
-    ) -> str:
-        """Integrate results from multiple agents into a coherent response"""
-        # Format agent outputs for integration
-        formatted_outputs = []
-        for agent_name, result in agent_results.items():
-            formatted_outputs.append(f"--- {agent_name} Output ---\n{result}\n")
-            
-        agent_outputs = "\n".join(formatted_outputs)
-        
-        integration_prompt = INTEGRATION_PROMPT.format(
-            user_query=query,
-            agent_outputs=agent_outputs,
-        )
-        
-        if verbose:
-            self._log_info("Integrating results from multiple agents")
-            
-        try:
-            if not self.structured_output:
-                integration_result = await self.llm.achat(query=integration_prompt, chat_history=chat_history)
-            else:
-                integration_result = await self._output_parser(
-                    output=integration_prompt, chat_history=chat_history
+                self.chat_memory.add_short_memory(
+                    "assistant",
+                    f"Agent: {agent_name} process failed with error: {str(e)}",
                 )
-            if verbose:
-                self._log_info("Integration completed successfully")
-                
-            return integration_result
-        except Exception as e:
-            error_msg = f"Error integrating results: {str(e)}"
-            self._log_error(error_msg)
-            return error_msg
-    
-    async def _run_parallel(
+        return True
+
+    @retry_on_error()
+    async def run(
         self,
         query: str,
         chat_history: List[ChatMessage] = [],
         verbose: bool = False,
-        additional_params: Dict[str, Any] = {},
+        *args,
+        **kwargs,
     ) -> str:
         """Process user request by executing multiple agents in parallel"""
-        chat_history_store = ChatMemory(initial_messages=chat_history)
+        self.chat_memory.set_initial_long_memories(chat_history)
+        self.chat_memory.reset_short_memories()
+        self.chat_memory.add_short_memory("user", query)
+        if verbose:
+            self._log_debug(f"🔍 Starting Parallel agent for query: {query}")
         try:
-            if self.callbacks:
-                self.callbacks.on_agent_start(self.name)
-                
-            # Use all registered agents if none specified
-            agents_to_execute = list(self.agent_registry.values())
-                
-            if not agents_to_execute:
+
+            if not list(self.agent_registry.values()):
                 if verbose:
-                    self._log_info("No agents available for execution")
-                response = await self.llm.achat("Answer this question: " + query, chat_history=chat_history_store.get_all_memories())
-                await asyncio.sleep(2)
-                if self.callbacks:
-                    self.callbacks.on_agent_end(self.name)
+                    self._log_warning(
+                        "No agents available for execution, Falling back to default agent response"
+                    )
+                response = await self.llm.achat(
+                    query, chat_history=self.chat_memory.get_long_memories()
+                )
+                await asyncio.sleep(0.1)
                 return response
-                
+
             # Execute agents in parallel
-            agent_results = await self._execute_parallel(
-                query=query,
-                agents_to_execute=agents_to_execute,
-                chat_history=chat_history,
-                verbose=verbose,
-                additional_params=additional_params
-            )
-            await asyncio.sleep(2)
+            await self._execute_parallel(query=query, verbose=verbose, *args, **kwargs)
             # Integrate results
-            final_response = await self._integrate_results(
-                query=query,
-                agent_results=agent_results,
-                chat_history=chat_history,
-                verbose=verbose
+            final_response = await self._generate_final_response(
+                query=query, verbose=verbose
             )
-            await asyncio.sleep(2)
-            if self.callbacks:
-                self.callbacks.on_agent_end(self.name)
-                
+
             return final_response
-            
+
         except Exception as e:
             self._log_error(f"Error in parallel execution: {str(e)}")
-            if self.callbacks:
-                self.callbacks.on_agent_end(self.name)
-                
             return (
                 "I encountered an error while processing your request in parallel mode. "
                 f"Error: {str(e)}"
             )
-    
+
     # Override the achat method to support parallel execution
     async def achat(
         self,
         query: str,
         verbose: bool = False,
         chat_history: List[ChatMessage] = [],
-        parallel: bool = True,
         *args,
-        **kwargs
+        **kwargs,
     ) -> str:
         """Async chat implementation that supports both parallel and sequential execution"""
-        additional_params = kwargs.get("additional_params", {})
-        max_retries = kwargs.get("max_retries", 1)
-        
-        # If parallel mode is enabled, use parallel execution
-        if parallel:
-            return await self._run_parallel(
-                query=query,
-                chat_history=chat_history,
-                verbose=verbose,
-                additional_params=additional_params,
-                max_retries=max_retries
+        if self.callbacks:
+            self.callbacks.on_agent_start(self.name)
+
+        try:
+            result = await self.run(
+                query=query, chat_history=chat_history, verbose=verbose, *args, **kwargs
             )
-        # Otherwise fall back to the sequential manager behavior
-        else:
-            return await super().achat(
-                query=query,
-                verbose=verbose,
-                chat_history=chat_history,
-                *args,
-                **kwargs
-            )
-    
+
+            return result
+
+        finally:
+            if self.callbacks:
+                self.callbacks.on_agent_end(self.name)
+
     # Override the chat method to support parallel execution
     def chat(
         self,
         query: str,
         verbose: bool = False,
         chat_history: List[ChatMessage] = [],
-        parallel: bool = True,
         *args,
-        **kwargs
+        **kwargs,
     ) -> str:
         """Sync chat implementation that supports both parallel and sequential execution"""
         # Create an event loop if one doesn't exist
@@ -230,36 +150,75 @@ class ParallelAgent(BaseMultiAgent):
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        
+
         # Run the async chat method in the event loop
         return loop.run_until_complete(
             self.achat(
-                query=query,
-                verbose=verbose,
-                chat_history=chat_history,
-                parallel=parallel,
-                *args,
-                **kwargs
+                query=query, verbose=verbose, chat_history=chat_history, *args, **kwargs
             )
         )
-    def stream_chat(
-        self,
-        query: str,
-        verbose: bool = False,
-        chat_history: List[ChatMessage] = [],
-        parallel: bool = True,
-        *args,
-        **kwargs,
-    ) -> Generator[str, None, None]:
-        pass
 
     async def astream_chat(
         self,
         query: str,
         verbose: bool = False,
-        chat_history: List[ChatMessage] = [],
-        parallel: bool = True,
+        chat_history: Optional[List[ChatMessage]] = None,
         *args,
         **kwargs,
     ) -> AsyncGenerator[str, None]:
-        pass
+        """Async streaming chat interface for the agent"""
+        # Get additional parameters
+        chat_history = chat_history or []
+        if self.callbacks:
+            self.callbacks.on_agent_start(self.name)
+
+        try:
+            result = await self.run(
+                query=query,
+                verbose=verbose,
+                chat_history=chat_history,
+                *args,
+                **kwargs,
+            )
+
+            # Stream the final result in chunks to simulate streaming
+            chunk_size = 5
+            for i in range(0, len(result), chunk_size):
+                yield result[i : i + chunk_size]
+                await asyncio.sleep(0.01)
+
+        finally:
+            if self.callbacks:
+                self.callbacks.on_agent_end(self.name)
+
+    def stream_chat(
+        self,
+        query: str,
+        verbose: bool = False,
+        chat_history: Optional[List[ChatMessage]] = None,
+        *args,
+        **kwargs,
+    ) -> Generator[str, None, None]:
+        """Synchronous streaming chat interface for the agent"""
+        # Create an event loop if one doesn't exist
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # Get the async generator
+        async_gen = self.astream_chat(
+            query=query, verbose=verbose, chat_history=chat_history, *args, **kwargs
+        )
+
+        # Helper function to convert async generator to sync generator
+        def sync_generator():
+            agen = async_gen.__aiter__()
+            while True:
+                try:
+                    yield loop.run_until_complete(agen.__anext__())
+                except StopAsyncIteration:
+                    break
+
+        return sync_generator()

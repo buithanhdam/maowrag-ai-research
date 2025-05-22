@@ -12,6 +12,7 @@ class AgentType(Enum):
     CODING = "CODING"
     REACT = "REACT"
     REFLECTION = "REFLECTION"
+    PLANNING = "PLANNING"
 
 
 @dataclass
@@ -62,6 +63,10 @@ class ChatMemory:
         self.long_memories = long_memories or []
         self.short_memories = short_memories or []
         self.max_length = max_length
+    def set_max_length(self, max_length: int) -> None:
+        self.max_length = max_length
+    def get_max_length(self) -> int:
+        return self.max_length
     def add_long_memory(self, role: str, content: str) -> None:
         self.long_memories.append(ChatMessage(role=role, content=content))
     def set_initial_long_memories(self, long_memories: List[ChatMessage]):
@@ -75,7 +80,7 @@ class ChatMemory:
             self.short_memories = self.short_memories[-self.max_length:]
     def get_short_memories(self) -> List[ChatMessage]:
         return self.short_memories
-    def clear_short_memories(self) -> None:
+    def reset_short_memories(self) -> None:
         self.short_memories = []
     def get_all_memories(self) -> List[ChatMessage]:
         return self.long_memories + self.short_memories
@@ -97,7 +102,10 @@ class ExecutionPlan:
         
     def add_step(self, step: PlanStep) -> None:
         self.steps.append(step)
-    
+    def get_steps(self) -> List[PlanStep]:
+        return self.steps
+    def get_num_steps(self) -> int:
+        return len(self.steps)
     def get_current_step(self) -> Optional[PlanStep]:
         if self.current_step_idx < len(self.steps):
             return self.steps[self.current_step_idx]
