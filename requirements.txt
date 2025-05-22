@@ -26,3 +26,5 @@ SpeechRecognition==3.14.2
 pydub==0.25.1
 magika==0.6.1
 llama-index-readers-json==0.3.0
+markdownify==1.1.0
+extract_msg==0.54.1

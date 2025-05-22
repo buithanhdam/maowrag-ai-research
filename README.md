@@ -9,10 +9,8 @@ It aims to serve as a **personal lab for rapid experimentation and learning**, o
 ### 🔍 Key Projects and Technologies
 
 - **RAG Techniques and Multi-Agent Orchestration**:  
-  - Leverage advanced multi-agent, web search, environment, RAG systems for document search, knowledge retrieval, and reasoning:  
-  👉 [AI Unlimited RAG App with Multi-Agent](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
-  - Explore powerful workflows with **Planning (ReAct flow)**, **Reflection**, **Tool Use**, and custom agents like:
-  👉 [Multi-Agent Orchestrator with tools](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
+  Leverage advanced multi-agent, web search, environment, RAG systems for document search, knowledge retrieval, and reasoning. Explore powerful workflows with **Planning (ReAct flow)**, **Reflection**, **Tool Use**, and custom agents like:
+  👉 [AI Multi-Agent Orchestrator RAG App with tools](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
 
 - **Meeting Note Agent**:  
   Summarizes and organizes meeting discussions intelligently:  
@@ -24,22 +22,22 @@ It aims to serve as a **personal lab for rapid experimentation and learning**, o
 
 - **Learning Agentic Patterns**:  
   Includes references to core building blocks of agent design like:
-  - **Planning**
-  - **Reflection**
-  👉 [Agentic Patterns](https://github.com/neural-maze/agentic_patterns/)
+  - [Planning Agent](https://blog.langchain.dev/planning-agents/)
+  - [Reflection](https://blog.langchain.dev/reflection-agents/)
+  - [Parallel Agent](https://google.github.io/adk-docs/agents/workflow-agents/parallel-agents/)
+  - [Router Agent](https://github.com/awslabs/agent-squad)
+  **and more**
 
 ---
 
 ## 💡 Project Vision & Future Roadmap
 
 This repository aims to stay at the cutting edge of:
-- `CodeAtc Agent` – intelligent code generation/execution
-- `Deep Research Agent` – auto web search, context synthesis
-- **RAG Techniques**
-- 🤖 **Autonomous Multi-Agent Systems**  
-- 🧩 **Agentic Design Patterns: Planning, Reflection, Memory, Tool Use**
-- 🔍 **Deep Research Agents** – self-guided, multi-step web and document understanding
+- 🤖 **Autonomous Multi-Agent Systems**: self-guided, multi-step web and document understanding
+- 🧩 **Agentic Design Patterns**: Planning, Reflection, Memory, Tool Use
+- 🔍 **RAG Techniques**: ragging, retrieval, and retrieval-augmented generation (Hybrid search, Re-rerank, HyDE,...)
 - 🛠️ **LLM-Powered Developer Tools** – such as code assistants and document builders
+- **Up-to-date AI technologies, development practices**: CI/CD, DevOps, and AI technologies, development practices.
 
 New experiments, integrations, and agent workflows will be continuously added to support the evolving landscape of **AI-first application development**.
 
@@ -209,4 +207,7 @@ This project is licensed under the MIT License.
 ## 🔗 References
 
 - [Agentic Patterns (Neural Maze)](https://github.com/neural-maze/agentic_patterns/)
-- [Multi-Agent Orchestrator (AWS Labs)](https://github.com/awslabs/multi-agent-orchestrator)
+- [Multi-Agent Orchestrator (AWS Labs)](https://github.com/awslabs/agent-squad)
+- [Google AgentDK Docs](https://google.github.io/adk-docs/)
+- [Langchain](https://blog.langchain.dev/)
+- [Maowrag unlimited ai agent](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)

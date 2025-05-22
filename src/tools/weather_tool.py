@@ -1,4 +1,3 @@
-from .base import create_function_tool
 from geopy.geocoders import Nominatim
 import requests
 from datetime import datetime
@@ -8,11 +7,8 @@ Retrieves the weather using Open-Meteo API for a given location (city) and a dat
 Note that the current date is {datetime.now().strftime('%Y-%m-%d')}.
 Returns a dictionary with time, temperature, humidity, precipitation, and windspeed for each hour.
 """
-
-geolocator = Nominatim(user_agent="weather-app") 
 def get_weather(location: str, date: str):
-    """Retrieves the weather using Open-Meteo API for a given location (city) and a date (yyyy-mm-dd). 
-    Returns a dictionary with time, temperature, humidity, precipitation, and windspeed for each hour."""
+    geolocator = Nominatim(user_agent="weather-app") 
     location = geolocator.geocode(location)
     print(date)
     if location:
@@ -38,8 +34,8 @@ def get_weather(location: str, date: str):
     else:
         return {"error": "Location not found"}
 
-get_weather_tool = create_function_tool(
-            get_weather,
-            name="get_weather",
-            description=WEATHER_DESCRIPTION
-        )
+# get_weather_tool = create_function_tool(
+#             get_weather,
+#             name="get_weather",
+#             description=WEATHER_DESCRIPTION
+#         )

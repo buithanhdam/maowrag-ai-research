@@ -116,7 +116,7 @@ def main():
                 time.sleep(0.01)  # Small delay for smoother animation
             
             # Update with the final response (without cursor)
-            response_placeholder.markdown(full_response)
+            response_placeholder.markdown(full_response.replace('\n', '  \n'), unsafe_allow_html=True)
             
             # Add completed response to chat history
             add_message("assistant", full_response)

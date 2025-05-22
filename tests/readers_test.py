@@ -1,6 +1,6 @@
 from src.readers import FileExtractor, parse_multiple_files
 from src.rag.rag_manager import RAGManager
-from src.config import RAGType, LLMType, global_config
+from src.config import RAGType, LLMProviderType, global_config
 from src.db.qdrant import QdrantVectorDatabase
 import dotenv
 import os 
@@ -11,7 +11,7 @@ if __name__ == "__main__":
     # Example usage
     collection_name="test_collection"
     # file = "tests/test_data/Free AI Podcast for Nonprofits Amplify.mp3"
-    file = "tests/test_data/test-vlc.pdf"
+    file = "tests/test_data/Flash Attention.pdf"
     file_id = str(uuid.uuid4())
     
     file_extractor = FileExtractor()

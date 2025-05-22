@@ -1,40 +1,38 @@
 from typing import List, AsyncGenerator
 from src.agents import (
     ReflectionAgent,
-    ReActAgent,
+    PlanningAgent,
     AgentOptions,
 )
-from src.tools import get_weather_tool, search_web_tool, rag_retriever_tool,search_paper_tool
-from src.llm import UnifiedLLM
+from src.tools import ToolManager
+from src.llm import BaseLLM
 from llama_index.core.llms import ChatMessage
-from src.config import LLMType
+from src.config import LLMProviderType
 
 from src.logger import get_formatted_logger
 logger = get_formatted_logger(__name__)
 class AgentService:
     def __init__(self):
         # Initialize LLM
-        self.llm = UnifiedLLM(model_name=LLMType.GEMINI)
+        self.llm = BaseLLM(provider=LLMProviderType.GOOGLE)
         # Initialize specialized agents
         self.reflection_agent = ReflectionAgent(
             self.llm,
             AgentOptions(
-                id="reflection",
                 name="Reflection Assistant",
                 description="Helps with information generation and refinement about football"
             ),
             system_prompt="Bạn là 1 trợ lý AI hữu ích, thân thiện và có hiểu biết sâu rộng."
         )
         
-        self.planning_agent = ReActAgent(
+        self.planning_agent = PlanningAgent(
             self.llm,
             AgentOptions(
-                id="react",
                 name="React Assistant",
                 description="Assists can reason and act with project planning, task breakdown, and using weather tool"
             ),
             system_prompt="Bạn là 1 trợ lý AI hữu ích, thân thiện và có hiểu biết sâu rộng.",
-            tools=[get_weather_tool, search_web_tool,rag_retriever_tool,search_paper_tool]
+            tools=ToolManager.get_all_tools()
         )
         
         # Chat history to provide context
