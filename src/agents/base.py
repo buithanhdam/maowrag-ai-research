@@ -271,7 +271,7 @@ class BaseAgent(ABC):
         FINAL_RESPONSE_PROMPT = f"""\
         You are a helpful assistant whose role is to synthesize the information gathered from previous tasks to provide a comprehensive and concise answer to the user's query.
         User query: {query}
-        Task Results: {self.chat_memory.get_short_memories()}
+        Task Results: {[f"{memory.role}:{memory.content}" for memory in self.chat_memory.get_short_memories()]}
         Answer the user's query directly using the information provided in the Task Results.
         Be concise and ensure all critical information is included in your response.
         Do not include any introductory just answer normalization response.

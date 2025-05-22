@@ -78,7 +78,7 @@ class ParallelAgent(BaseMultiAgent):
         """Process user request by executing multiple agents in parallel"""
         self.chat_memory.set_initial_long_memories(chat_history)
         self.chat_memory.reset_short_memories()
-        self.chat_memory.add_short_memory("user", query)
+
         if verbose:
             self._log_debug(f"🔍 Starting Parallel agent for query: {query}")
         try:

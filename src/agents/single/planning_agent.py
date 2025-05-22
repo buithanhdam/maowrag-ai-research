@@ -134,7 +134,7 @@ class PlanningAgent(BaseAgent):
         """Generate a new plan after a step failure."""
         prompt = f"""
         Previous plan failed at step: {failed_step.description}.
-        Completed steps: {self.chat_memory.get_short_memories()}
+        Completed steps: {[f"{memory.role}:{memory.content}" for memory in self.chat_memory.get_short_memories()]}
         Replan for user query: {query}, starting from the failed step.
         """
         if verbose:
@@ -267,7 +267,7 @@ class PlanningAgent(BaseAgent):
         try:
             await self._execute_plan(query, max_steps=max_steps, verbose=verbose)
             if self.plan.get_num_steps() <= 1:
-                return self.plan.get_current_step().result
+                return self.plan.get_steps()[0].result
             final_response = await self._generate_final_response(query, verbose)
             return final_response
 

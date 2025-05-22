@@ -7,7 +7,21 @@ from google import genai
 from google.genai import types
 from llama_index.llms.gemini import Gemini
 from llama_index.core.llms import ChatMessage
+import google.generativeai as genai
+from src.config import get_llm_config, LLMProviderType
+def test_generative_ai():
+    gemini_config = get_llm_config(LLMProviderType.GOOGLE)
+    genai.configure(api_key=gemini_config.api_key)
 
+    model = "models/gemini-2.5-flash-preview-04-17"
+    model_meta = genai.get_model(model)
+    genai_model = genai.GenerativeModel(
+        model_name=model,
+    )
+    chat = genai_model.start_chat()
+    response = chat.send_message("hello")
+    print(model_meta.output_token_limit)
+    print(response)
 if __name__ == "__main__":
     client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
     with open('tests/test_data/t3qWG.png', 'rb') as f:
