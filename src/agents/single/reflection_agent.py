@@ -118,8 +118,8 @@ class ReflectionAgent(BaseAgent):
 
             query_gen = f"""
             Your task: {self._get_default_generation_prompt()}
-            {f"Short memory: {self.chat_memory.get_short_memories()}" if self.chat_memory.get_short_memories() else ""}
             User query: {query}
+            {f"Suggestion: {self.chat_memory.get_short_memories()[-1].content}" if len(self.chat_memory.get_short_memories()) > 0 else ""}
             """
 
             # Use long_memories for context and the query_gen as prompt
@@ -132,7 +132,7 @@ class ReflectionAgent(BaseAgent):
                     f"{response[:100]}..." if len(response) > 100 else response
                 )
                 self._log_info(f"Generated content: {response_preview}")
-            self.chat_memory.add_short_memory("user", query_gen)
+
             self.chat_memory.add_short_memory("assistant", response)
             return response
 
@@ -166,7 +166,6 @@ class ReflectionAgent(BaseAgent):
                 )
                 self._log_info(f"Generated critique: {critique_preview}")
 
-            self.chat_memory.add_short_memory("user", reflection_msg)
             return critique
 
         except Exception as e:

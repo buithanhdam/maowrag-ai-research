@@ -127,7 +127,7 @@ class RouterAgent(BaseMultiAgent):
         Your task is to assess whether the agent's response appropriately addresses the user's query, both in terms of content and context.
 
         User Query: {query}
-        Selected Agent Response: {self.chat_memory.get_short_memories()}
+        Selected Agent Response: {[f"{memory.content}" for memory in self.chat_memory.get_short_memories()]}
 
         Please evaluate and respond in JSON format:
         {{
@@ -184,7 +184,7 @@ class RouterAgent(BaseMultiAgent):
         """Process user request by classifying and delegating to appropriate agent"""
         self.chat_memory.set_initial_long_memories(chat_history)
         self.chat_memory.reset_short_memories()
-        self.chat_memory.add_short_memory("user", query)
+
         if verbose:
             self._log_debug(f"🔍 Starting Router agent for query: {query}")
         try:

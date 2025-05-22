@@ -22,9 +22,6 @@ from llama_index.llms.openai import OpenAI
 from src.config import LLMProviderType, get_llm_config
 from src.logger import get_formatted_logger
 
-logger = get_formatted_logger(__file__)
-
-
 def retry_on_quota_error():
     def is_429_error(exception: Exception) -> bool:
         if isinstance(exception, GoogleAPICallError):
@@ -37,7 +34,7 @@ def retry_on_quota_error():
         retry=retry_if_429_error,
         stop=stop_after_attempt(3),
         wait=wait_strategy,
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=before_sleep_log(get_formatted_logger(__file__), logging.WARNING),
         reraise=True,
     )
 
@@ -59,6 +56,7 @@ class BaseLLM:
         self.temperature = temperature or LLM_CONFIG.temperature
         self.max_tokens = max_tokens or LLM_CONFIG.max_tokens
         self.system_prompt = system_prompt or LLM_CONFIG.system_prompt
+        self.logger= get_formatted_logger(__file__)
         self._initialize_model()
 
     def _set_system_prompt(self, system_prompt: str) -> None:
@@ -91,7 +89,7 @@ class BaseLLM:
             else:
                 raise ValueError(f"Unsupported model type: {self.provider}")
         except Exception as e:
-            logger.error(f"Failed to initialize {self.provider} model: {str(e)}")
+            self.logger.error(f"Failed to initialize {self.provider} model: {str(e)}")
             raise
 
     def _get_model(self) -> FunctionCallingLLM:
@@ -126,7 +124,7 @@ class BaseLLM:
             else:
                 return response.message.content
         except Exception as e:
-            logger.error(f"Error extracting response from {self.provider}: {str(e)}")
+            self.logger.error(f"Error extracting response from {self.provider}: {str(e)}")
             return response.message.content
 
     @retry_on_quota_error()
@@ -136,7 +134,7 @@ class BaseLLM:
             response = self.model.chat(messages)
             return self._extract_response(response)
         except Exception as e:
-            logger.error(f"Error in {self.provider} chat: {str(e)}")
+            self.logger.error(f"Error in {self.provider} chat: {str(e)}")
             raise e
 
     @retry_on_quota_error()
@@ -148,7 +146,7 @@ class BaseLLM:
             response = await self.model.achat(messages)
             return self._extract_response(response)
         except Exception as e:
-            logger.error(f"Error in {self.provider} async chat: {str(e)}")
+            self.logger.error(f"Error in {self.provider} async chat: {str(e)}")
             raise e
 
     @retry_on_quota_error()
@@ -161,7 +159,7 @@ class BaseLLM:
             for response in response_stream:
                 yield self._extract_response(response)
         except Exception as e:
-            logger.error(f"Error in {self.provider} stream chat: {str(e)}")
+            self.logger.error(f"Error in {self.provider} stream chat: {str(e)}")
             raise e
 
     @retry_on_quota_error()
@@ -182,7 +180,7 @@ class BaseLLM:
                 yield self._extract_response(response)
 
         except Exception as e:
-            logger.error(f"Error in {self.provider} async stream chat: {str(e)}")
+            self.logger.error(f"Error in {self.provider} async stream chat: {str(e)}")
             raise e
 
     def _get_provider(self) -> str:
