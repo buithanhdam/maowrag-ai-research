@@ -186,7 +186,12 @@ class RouterAgent(BaseMultiAgent):
         self.chat_memory.reset_short_memories()
 
         if verbose:
-            self._log_debug(f"🔍 Starting Router agent for query: {query}")
+            query_preview = (
+                str(query)[:100] + "..."
+                if len(str(query)) > 100
+                else str(query)
+            )
+            self._log_debug(f"🔍 Starting Router agent for query: {query_preview}")
         try:
 
             # Classify the request

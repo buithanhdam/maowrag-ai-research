@@ -80,7 +80,12 @@ class ParallelAgent(BaseMultiAgent):
         self.chat_memory.reset_short_memories()
 
         if verbose:
-            self._log_debug(f"🔍 Starting Parallel agent for query: {query}")
+            query_preview = (
+                str(query)[:100] + "..."
+                if len(str(query)) > 100
+                else str(query)
+            )
+            self._log_debug(f"🔍 Starting Parallel agent for query: {query_preview}")
         try:
 
             if not list(self.agent_registry.values()):

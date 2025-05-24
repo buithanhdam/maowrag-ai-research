@@ -256,7 +256,12 @@ class ReflectionAgent(BaseAgent):
             The final generated content after reflection iterations
         """
         if verbose:
-            self._log_debug(f"Starting reflection process for query: {query}")
+            query_preview = (
+                str(query)[:100] + "..."
+                if len(str(query)) > 100
+                else str(query)
+            )
+            self._log_debug(f"Starting reflection process for query: {query_preview}")
 
         self.chat_memory.set_initial_long_memories(chat_history)
         self.chat_memory.reset_short_memories()

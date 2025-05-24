@@ -22,16 +22,17 @@ from llama_index.llms.openai import OpenAI
 from src.config import LLMProviderType, get_llm_config
 from src.logger import get_formatted_logger
 
-def retry_on_quota_error():
-    def is_429_error(exception: Exception) -> bool:
+def retry_on_transient_error():
+    def is_transient_error(exception: Exception) -> bool:
         if isinstance(exception, GoogleAPICallError):
-            return exception.code.value == 429 or "429" in str(exception)
-        return "429" in str(exception)
-
+            # Retry for 429, 500, 502, 503, 504
+            return exception.code.value in {429, 500, 502, 503, 504}
+        return any(code in str(exception) for code in ["429", "500", "502", "503", "504"])
     wait_strategy = wait_chain(wait_fixed(3), wait_fixed(5), wait_fixed(10))
-    retry_if_429_error = retry_if_exception(is_429_error)
+    retry_condition = retry_if_exception(is_transient_error)
+
     return retry(
-        retry=retry_if_429_error,
+        retry=retry_condition,
         stop=stop_after_attempt(3),
         wait=wait_strategy,
         before_sleep=before_sleep_log(get_formatted_logger(__file__), logging.WARNING),
@@ -127,7 +128,7 @@ class BaseLLM:
             self.logger.error(f"Error extracting response from {self.provider}: {str(e)}")
             return response.message.content
 
-    @retry_on_quota_error()
+    @retry_on_transient_error()
     def chat(self, query: str, chat_history: Optional[List[ChatMessage]] = None) -> str:
         try:
             messages = self._prepare_messages(query, chat_history)
@@ -137,7 +138,7 @@ class BaseLLM:
             self.logger.error(f"Error in {self.provider} chat: {str(e)}")
             raise e
 
-    @retry_on_quota_error()
+    @retry_on_transient_error()
     async def achat(
         self, query: str, chat_history: Optional[List[ChatMessage]] = None
     ) -> str:
@@ -149,7 +150,7 @@ class BaseLLM:
             self.logger.error(f"Error in {self.provider} async chat: {str(e)}")
             raise e
 
-    @retry_on_quota_error()
+    @retry_on_transient_error()
     def stream_chat(
         self, query: str, chat_history: Optional[List[ChatMessage]] = None
     ) -> Generator[str, None, None]:
@@ -162,7 +163,7 @@ class BaseLLM:
             self.logger.error(f"Error in {self.provider} stream chat: {str(e)}")
             raise e
 
-    @retry_on_quota_error()
+    @retry_on_transient_error()
     async def astream_chat(
         self, query: str, chat_history: Optional[List[ChatMessage]] = None
     ) -> AsyncGenerator[str, None]:
