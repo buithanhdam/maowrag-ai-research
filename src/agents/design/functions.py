@@ -12,7 +12,6 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from src.config import global_config
 from src.llm import GeminiEmbedding
 def sanitize_json_string(s: str) -> str:
-    # Loại bỏ ký tự control: ASCII từ 0 đến 31, ngoại trừ tab (09), newline (0A), carriage return (0D)
     return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
 def clean_json_response(response: str) -> str:
     """Clean JSON response from LLM output to make it parseable"""

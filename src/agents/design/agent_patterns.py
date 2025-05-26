@@ -14,31 +14,40 @@ class AgentType(Enum):
     REFLECTION = "REFLECTION"
     PLANNING = "PLANNING"
 
+class AgentIterationProcess(BaseModel):
+    idx: int
+    result: str
+    time_taken: float
+    token_factory: Dict[str, Any] = None
 
-@dataclass
-class AgentProcessingResult:
-    user_input: str
-    agent_id: str
-    agent_name: str
+class AgentProcessingResult(BaseModel):
     session_id: str
+    agent_id: str
+    iteration_results: List[AgentIterationProcess]
     additional_params: Dict[str, Any] = field(default_factory=dict)
 
-
-@dataclass
 class AgentResponse:
     metadata: AgentProcessingResult
-    output: Union[Any, str]
+    message: str
     streaming: bool
+    
+    def __str__(self):
+        return self.message
+    def __repr__(self) -> str:
+        return f"AgentResponse(message='{self.message[:50]}...', metadata={self.metadata})"
+    @property
+    def usage_metadata(self) -> dict:
+        return self.metadata
 
 
 class AgentCallbacks:
     def on_llm_new_token(self, token: str) -> None:
         pass
     
-    def on_agent_start(self, agent_name: str) -> None:
+    def on_agent_start(self, agent_id: str) -> None:
         pass
     
-    def on_agent_end(self, agent_name: str) -> None:
+    def on_agent_end(self, agent_id: str) -> None:
         pass
 
 
@@ -85,7 +94,7 @@ class ChatMemory:
     def get_all_memories(self) -> List[ChatMessage]:
         return self.long_memories + self.short_memories
 
-
+# For planning agent
 @dataclass
 class PlanStep:
     description: str = None
