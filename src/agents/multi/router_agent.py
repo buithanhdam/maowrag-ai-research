@@ -4,7 +4,7 @@ from llama_index.core.tools import FunctionTool
 import json
 import asyncio
 
-from ..design import AgentOptions, clean_json_response, retry_on_error
+from ..utils import AgentOptions, clean_json_response, retry_on_error
 from ..base import BaseAgent
 from .base import BaseMultiAgent
 from src.llm import BaseLLM

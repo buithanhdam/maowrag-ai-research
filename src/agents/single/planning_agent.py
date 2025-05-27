@@ -5,7 +5,7 @@ from llama_index.core.llms import ChatMessage
 import asyncio
 
 from src.llm import BaseLLM
-from ..design import (
+from ..utils import (
     clean_json_response,
     AgentOptions,
     ExecutionPlan,

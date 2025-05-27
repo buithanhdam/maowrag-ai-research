@@ -5,7 +5,7 @@ from llama_index.core.tools import FunctionTool
 
 from src.llm import BaseLLM
 from .base import BaseMultiAgent
-from ..design import (
+from ..utils import (
     AgentOptions,
     retry_on_error,
 )

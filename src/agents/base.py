@@ -9,7 +9,7 @@ from llama_index.core.output_parsers import PydanticOutputParser
 from llama_index.core.program import LLMTextCompletionProgram
 
 from src.logger import get_formatted_logger
-from .design import (
+from .utils import (
     clean_json_response,
     AgentCallbacks,
     AgentOptions,
