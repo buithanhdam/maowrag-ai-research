@@ -8,6 +8,10 @@ It aims to serve as a **personal lab for rapid experimentation and learning**, o
 
 ### 🔍 Key Projects and Technologies
 
+- **Building effective agents (Anthropic)**:
+  Explore the common patterns for agentic systems we’ve seen in production. Starting with our foundational building block—the augmented LLM—and progressively increase complexity, from simple compositional workflows to autonomous agents.
+  👉 [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents)
+
 - **RAG Techniques and Multi-Agent Orchestration**:  
   Leverage advanced multi-agent, web search, environment, RAG systems for document search, knowledge retrieval, and reasoning. Explore powerful workflows with **Planning (ReAct flow)**, **Reflection**, **Tool Use**, and custom agents like:
   👉 [AI Multi-Agent Orchestrator RAG App with tools](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
@@ -27,6 +31,10 @@ It aims to serve as a **personal lab for rapid experimentation and learning**, o
   - [Parallel Agent](https://google.github.io/adk-docs/agents/workflow-agents/parallel-agents/)
   - [Router Agent](https://github.com/awslabs/agent-squad)
   **and more**
+
+- **Model Context Protocol Agent aka MCP Agent**:
+  Lastmile AI develop MCP-Agent is a simple, composable framework to build agents using Model Context Protocol.
+  👉 [mcp-agent](https://github.com/lastmile-ai/mcp-agent)
 
 ---
 
@@ -211,3 +219,5 @@ This project is licensed under the MIT License.
 - [Google AgentDK Docs](https://google.github.io/adk-docs/)
 - [Langchain](https://blog.langchain.dev/)
 - [Maowrag unlimited ai agent](https://github.com/buithanhdam/maowrag-unlimited-ai-agent)
+- [Building effective agents (Anthropic)](https://www.anthropic.com/engineering/building-effective-agents)
+- [MCP-Agent](https://github.com/lastmile-ai/mcp-agent)
