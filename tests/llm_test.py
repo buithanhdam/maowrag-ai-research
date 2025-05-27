@@ -5,9 +5,10 @@ from src.config import LLMProviderType
 async def test_gemini_achat():
     try:
         llm = BaseLLM(provider=LLMProviderType.GOOGLE)
-        response = await llm.achat("Xin chào!")
+        response = await llm.achat("Rất vui được gặp bạn!")
         print("=== Chat đơn giản ===")
         print(f"Response: {response}")
+        print(response.usage_metadata)
         
         history = [
             ChatMessage(role="user", content="Bạn là ai?"),
@@ -16,6 +17,7 @@ async def test_gemini_achat():
         response = await llm.achat("Rất vui được gặp bạn!", chat_history=history)
         print("\n=== Chat với history ===")
         print(f"Response: {response}")
+        print(response.usage_metadata)
         
     except Exception as e:
         print(f"Error: {str(e)}")
@@ -43,4 +45,4 @@ async def test_gemini_astream():
 
 if __name__ == "__main__":
     # test_gemini_sync()
-    asyncio.run(test_gemini_astream())
+    asyncio.run(test_gemini_achat())

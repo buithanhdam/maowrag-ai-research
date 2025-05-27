@@ -5,7 +5,7 @@ from llama_index.core.llms import ChatMessage
 import asyncio
 
 from src.llm import BaseLLM
-from ..design import (
+from ..utils import (
     clean_json_response,
     AgentOptions,
     ExecutionPlan,
@@ -47,13 +47,15 @@ class PlanningAgent(BaseAgent):
             self._log_info(f"Step {step_num} evaluated as successful.")
         return True
 
-    async def _gen_plan(self, query: str, verbose: bool) -> bool:
+    async def _gen_plan(self, query: str,max_steps:int, verbose: bool) -> bool:
         """Generate an optimized execution plan using available tools."""
         prompt = f"""
         Acting as a planning assistant, create a focused plan based on user query using ONLY the tools listed below.
 
         User query: {query}
 
+        Maximum number of steps: {max_steps}
+        
         Available tools:
         {self._format_tool_signatures()}
 
@@ -128,6 +130,7 @@ class PlanningAgent(BaseAgent):
     async def _replan(
         self,
         query: str,
+        max_steps: int,
         failed_step: PlanStep,
         verbose: bool,
     ) -> bool:
@@ -141,7 +144,7 @@ class PlanningAgent(BaseAgent):
             self._log_debug(
                 f"Replanning after failure in step: {failed_step.description}"
             )
-        return await self._gen_plan(prompt, verbose)
+        return await self._gen_plan(prompt,max_steps, verbose)
 
     async def _execute_plan(
         self, query: str, max_steps: int, verbose: bool, max_replan: int = 2
@@ -258,11 +261,16 @@ class PlanningAgent(BaseAgent):
     ) -> str:
         """Run the planning agent process on the given query"""
         if verbose:
-            self._log_debug(f"🔍 Starting planning agent for query: {query}")
+            query_preview = (
+                str(query)[:100] + "..."
+                if len(str(query)) > 100
+                else str(query)
+            )
+            self._log_debug(f"🔍 Starting planning agent for query: {query_preview}")
 
         self.chat_memory.set_initial_long_memories(chat_history)
         self.chat_memory.reset_short_memories()
-        await self._gen_plan(query, verbose)
+        await self._gen_plan(query,max_steps, verbose)
 
         try:
             await self._execute_plan(query, max_steps=max_steps, verbose=verbose)

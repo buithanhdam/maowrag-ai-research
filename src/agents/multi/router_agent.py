@@ -4,7 +4,7 @@ from llama_index.core.tools import FunctionTool
 import json
 import asyncio
 
-from ..design import AgentOptions, clean_json_response, retry_on_error
+from ..utils import AgentOptions, clean_json_response, retry_on_error
 from ..base import BaseAgent
 from .base import BaseMultiAgent
 from src.llm import BaseLLM
@@ -186,7 +186,12 @@ class RouterAgent(BaseMultiAgent):
         self.chat_memory.reset_short_memories()
 
         if verbose:
-            self._log_debug(f"🔍 Starting Router agent for query: {query}")
+            query_preview = (
+                str(query)[:100] + "..."
+                if len(str(query)) > 100
+                else str(query)
+            )
+            self._log_debug(f"🔍 Starting Router agent for query: {query_preview}")
         try:
 
             # Classify the request

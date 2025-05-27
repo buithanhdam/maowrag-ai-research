@@ -97,4 +97,4 @@ async def test_multi_agent():
     print("Manager agent commplete: ",response)
     
 if __name__ == "__main__":
-    asyncio.run(test_multi_agent())
+    asyncio.run(test_planning_async())

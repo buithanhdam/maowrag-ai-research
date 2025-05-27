@@ -5,7 +5,7 @@ from llama_index.core.tools import FunctionTool
 
 from src.llm import BaseLLM
 from .base import BaseMultiAgent
-from ..design import (
+from ..utils import (
     AgentOptions,
     retry_on_error,
 )
@@ -80,7 +80,12 @@ class ParallelAgent(BaseMultiAgent):
         self.chat_memory.reset_short_memories()
 
         if verbose:
-            self._log_debug(f"🔍 Starting Parallel agent for query: {query}")
+            query_preview = (
+                str(query)[:100] + "..."
+                if len(str(query)) > 100
+                else str(query)
+            )
+            self._log_debug(f"🔍 Starting Parallel agent for query: {query_preview}")
         try:
 
             if not list(self.agent_registry.values()):

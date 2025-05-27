@@ -60,7 +60,7 @@ class LLMProviderType(enum.Enum):
      
 class LLMConfig(BaseModel):
     api_key: str
-    model_name: LLMProviderType
+    provider: LLMProviderType
     model_id: str
     temperature: float = 0.7
     max_tokens: int = 2048
@@ -84,7 +84,7 @@ class QdrantPayload(BaseModel):
 class Config:
     OPENAI_CONFIG = LLMConfig(
         api_key=os.environ.get('OPENAI_API_KEY',""),
-        model_name=LLMProviderType.OPENAI,
+        provider=LLMProviderType.OPENAI,
         model_id="gpt-3.5-turbo",
         temperature=0.7,
         max_tokens= 2048,
@@ -93,7 +93,7 @@ class Config:
 
     GEMINI_CONFIG = LLMConfig(
         api_key=os.environ.get('GOOGLE_API_KEY',""),
-        model_name=LLMProviderType.GOOGLE,
+        provider=LLMProviderType.GOOGLE,
         model_id="models/gemini-2.0-flash",
         temperature=0.8,
         max_tokens = 2048,
@@ -101,7 +101,7 @@ class Config:
     )
     ANTHROPIC_CONFIG = LLMConfig(
         api_key=os.environ.get('ANTHROPIC_API_KEY',""),
-        model_name=LLMProviderType.ANTHROPIC,
+        provider=LLMProviderType.ANTHROPIC,
         model_id="claude-3-haiku-20240307",
         temperature=0.7,
         max_tokens=4000,

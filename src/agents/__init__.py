@@ -1,5 +1,5 @@
 from .base import BaseAgent
-from .design import AgentOptions
+from .utils import AgentOptions
 from .single import PlanningAgent,ReflectionAgent
 from .multi import ParallelAgent, RouterAgent
 __all__ = [
