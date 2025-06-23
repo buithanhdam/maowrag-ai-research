@@ -6,57 +6,11 @@ import dotenv
 dotenv.load_dotenv()
 import os
 from src.prompt import (LLM_SYSTEM_PROMPT)
+from src.constants import (
+    SUPPORTED_MEDIA_FILE_EXTENSIONS,SUPPORTED_NORMAL_FILE_EXTENSIONS,
+    LLMProviderType
+)
 
-SUPPORTED_FILE_EXTENSIONS = [
-    ".pdf",
-    ".docx",
-    ".html",
-    ".txt",
-    ".json",
-    # ".pptx",
-    ".md",
-    ".ipynb",
-    ".mbox",
-    ".xml",
-    ".rtf",
-]
-SUPPORTED_MEDIA_FILE_EXTENSIONS = [
-    ".wav",
-    ".mp3",
-    ".m4a",
-    ".mp4",
-    ".jpg",
-    ".jpeg",
-    ".png",
-]
-SUPPORTED_EXCEL_FILE_EXTENSIONS = [
-    ".xlsx",
-    ".xls",
-    ".csv",
-]
-ACCEPTED_MIME_MEDIA_TYPE_PREFIXES = [
-    "audio/wav",
-    "audio/x-wav",
-    "audio/mpeg",
-    "audio/mp4",
-    "video/mp4",
-    "image/jpeg", 
-    "image/png",
-]
-
-
-class RAGType(enum.Enum):
-    NORMAL = "normal_rag"
-    HYBRID = "hybrid_rag"
-    CONTEXTUAL = "contextual_rag"
-    FUSION = "fusion_rag"
-    HYDE = "hyde_rag"
-    NAIVE = "naive_rag"
-    
-class LLMProviderType(enum.Enum):
-    GOOGLE = "google"
-    OPENAI = "openai"
-    ANTHROPIC = "anthropic" 
      
 class LLMConfig(BaseModel):
     api_key: str
@@ -73,7 +27,18 @@ class RAGConfig(BaseModel):
     default_collection: str = "documents"
     max_results: int = 5
     similarity_threshold: float = 0.7
-       
+class ReaderConfig(BaseModel):
+    num_threads: int = 3
+    image_resolution_scale: float = 2.0
+    enable_ocr: bool = True
+    llm_provider: LLMProviderType = LLMProviderType.OPENAI
+    enable_agentic: bool = True
+    max_pages: int = 100
+    max_file_size: int = 20971520  # 20MB
+    chunk_size: int = 6000
+    supported_formats: list[str] = (
+        SUPPORTED_MEDIA_FILE_EXTENSIONS + SUPPORTED_NORMAL_FILE_EXTENSIONS
+    )     
 class QdrantPayload(BaseModel):
     """Payload for vectors in Qdrant"""
     document_id: str | int
@@ -99,14 +64,7 @@ class Config:
         max_tokens = 2048,
         system_prompt=LLM_SYSTEM_PROMPT
     )
-    ANTHROPIC_CONFIG = LLMConfig(
-        api_key=os.environ.get('ANTHROPIC_API_KEY',""),
-        provider=LLMProviderType.ANTHROPIC,
-        model_id="claude-3-haiku-20240307",
-        temperature=0.7,
-        max_tokens=4000,
-        system_prompt=LLM_SYSTEM_PROMPT
-    )
+    READER_CONFIG: ReaderConfig = ReaderConfig()
     QDRANT_URL = os.environ.get("QDRANT_URL")
     RAG_CONFIG: RAGConfig = RAGConfig()
 
@@ -116,8 +74,6 @@ def get_llm_config(llm_type: LLMProviderType) -> LLMConfig:
         return global_config.OPENAI_CONFIG
     elif llm_type == LLMProviderType.GOOGLE:
         return global_config.GEMINI_CONFIG
-    elif llm_type == LLMProviderType.ANTHROPIC:
-        return global_config.ANTHROPIC_CONFIG
     else:
         raise ValueError(f"Unsupported LLM type: {llm_type}")
 

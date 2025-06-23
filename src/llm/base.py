@@ -10,7 +10,8 @@ from llama_index.llms.gemini import Gemini
 from llama_index.llms.openai import OpenAI
 
 from .utils import retry_on_transient_error, TokenUsage, LLMResponse, StreamChunk
-from src.config import LLMProviderType, get_llm_config
+from src.config import get_llm_config
+from src.constants import LLMProviderType
 from src.logger import get_formatted_logger
 
 class BaseLLM:

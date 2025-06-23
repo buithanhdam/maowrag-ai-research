@@ -13,7 +13,8 @@ from llama_index.core.schema import NodeWithScore
 from src.llm import GeminiEmbedding
 from src.db import QdrantVectorDatabase
 from src.logger import get_formatted_logger
-from src.config import QdrantPayload, get_llm_config,LLMProviderType
+from src.config import QdrantPayload, get_llm_config
+from src.constants import LLMProviderType
 
 
 class BaseRAG(ABC):

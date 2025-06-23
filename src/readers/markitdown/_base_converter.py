@@ -13,6 +13,7 @@ class DocumentConverterResult:
         markdown: str,
         *,
         title: Optional[str] = None,
+        base64_images: Optional[List[Any]] = None,
         **kwargs: Any,
     ):
         """
@@ -28,6 +29,7 @@ class DocumentConverterResult:
         self.markdown = markdown
         self.title = title
         self.metadata = kwargs
+        self.base64_images=base64_images
 
     @property
     def text_content(self) -> str:

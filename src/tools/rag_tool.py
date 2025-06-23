@@ -1,6 +1,6 @@
 from src.rag.rag_manager import RAGManager
-from src.config import RAGType
-from src.config import global_config, LLMProviderType
+from src.config import global_config
+from src.constants import LLMProviderType,RAGType
 
 def retrieve_documents(query: str) -> str:
     """

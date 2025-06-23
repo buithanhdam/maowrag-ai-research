@@ -23,7 +23,8 @@ from ._stream_info import StreamInfo
 from ._uri_utils import parse_data_uri, file_uri_to_path
 
 from .converters import (
-    AudioConverter,OCRConverter, XlsConverter, XlsxConverter, CsvConverter,OutlookMsgHTMLConverter,HtmlConverter
+    AudioConverter,ImageConverter, XlsConverter, XlsxConverter, CsvConverter,OutlookMsgHTMLConverter,HtmlConverter,
+    DocxConverter,PdfConverter,PlainTextConverter,PptxConverter,ZipConverter
 )
 
 from ._base_converter import DocumentConverter, DocumentConverterResult
@@ -154,12 +155,12 @@ class MarkItDown:
             # Register converters for successful browsing operations
             # Later registrations are tried first / take higher priority than earlier registrations
             # To this end, the most specific converters should appear below the most generic converters
-            # self.register_converter(
-            #     PlainTextConverter(), priority=PRIORITY_GENERIC_FILE_FORMAT
-            # )
-            # self.register_converter(
-            #     ZipConverter(markitdown=self), priority=PRIORITY_GENERIC_FILE_FORMAT
-            # )
+            self.register_converter(
+                PlainTextConverter(), priority=PRIORITY_GENERIC_FILE_FORMAT
+            )
+            self.register_converter(
+                ZipConverter(markitdown=self), priority=PRIORITY_GENERIC_FILE_FORMAT
+            )
             self.register_converter(
                 HtmlConverter(), priority=PRIORITY_GENERIC_FILE_FORMAT
             )
@@ -167,15 +168,14 @@ class MarkItDown:
             # self.register_converter(WikipediaConverter())
             # self.register_converter(YouTubeConverter())
             # self.register_converter(BingSerpConverter())
-            # self.register_converter(DocxConverter())
+            self.register_converter(DocxConverter())
             self.register_converter(XlsxConverter())
             self.register_converter(XlsConverter())
-            # self.register_converter(PptxConverter())
+            self.register_converter(PptxConverter())
             self.register_converter(AudioConverter())
-            # self.register_converter(ImageConverter())
-            self.register_converter(OCRConverter())
+            self.register_converter(ImageConverter())
             # self.register_converter(IpynbConverter())
-            # self.register_converter(PdfConverter())
+            self.register_converter(PdfConverter())
             self.register_converter(OutlookMsgHTMLConverter())
             # self.register_converter(EpubConverter())
             self.register_converter(CsvConverter())

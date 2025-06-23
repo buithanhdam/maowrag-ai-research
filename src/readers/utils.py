@@ -6,12 +6,11 @@ from datetime import datetime
 from llama_index.core import Document
 import ast
 from tqdm import tqdm
-from src.config import SUPPORTED_FILE_EXTENSIONS, SUPPORTED_MEDIA_FILE_EXTENSIONS, SUPPORTED_EXCEL_FILE_EXTENSIONS
-from src.logger import get_formatted_logger
+from src.config import global_config
 from .markitdown import DocumentConverterResult
+from .tokenizer import ReaderWorker
 
 load_dotenv()
-logger = get_formatted_logger(__file__)
 
 
 def check_valid_extenstion(file_path: str | Path) -> bool:
@@ -24,8 +23,7 @@ def check_valid_extenstion(file_path: str | Path) -> bool:
     Returns:
         bool: True if the file extension is supported, False otherwise.
     """
-    allowed_extensions = SUPPORTED_FILE_EXTENSIONS + SUPPORTED_MEDIA_FILE_EXTENSIONS + SUPPORTED_EXCEL_FILE_EXTENSIONS
-    return Path(file_path).suffix in allowed_extensions
+    return Path(file_path).suffix in global_config.READER_CONFIG.supported_formats
 
 
 def get_files_from_folder_or_file_paths(files_or_folders: list[str]) -> list[str]:
@@ -54,7 +52,7 @@ def get_files_from_folder_or_file_paths(files_or_folders: list[str]) -> list[str
             if check_valid_extenstion(file_or_folder):
                 files.append(str(Path(file_or_folder).resolve()))
             else:
-                logger.warning(f"Invalid file: {file_or_folder}")
+                print(f"Invalid file: {file_or_folder}")
 
     return files
 
@@ -71,6 +69,7 @@ def parse_multiple_files(
     Returns:
         list[Document]: List of documents from all files.
     """
+    logger = global_config.GET_LOGGER(__name__)
     assert extractor, "Extractor is required."
 
     if isinstance(files_or_folder, str):
@@ -84,23 +83,47 @@ def parse_multiple_files(
     logger.info(f"Valid files: {valid_files}")
 
     documents: list[Document] = []
-
+    worker = ReaderWorker()
     files_to_process = tqdm(valid_files, desc="Starting parse files", unit="file") if show_progress else valid_files
-
     for file in files_to_process:
         file_path_obj = Path(file)
         file_suffix = file_path_obj.suffix.lower()
         file_extractor = extractor[file_suffix]
+        result: DocumentConverterResult = file_extractor.convert(file)
+        metadata={
+            "title": result.title,
+            "created_at": datetime.now().isoformat(),
+            "file_name": file_path_obj.name,
+        }
+        if file_suffix in ['.xlsx', '.xls', '.pdf']:
+            try:
+                text_contents: list = ast.literal_eval(result.text_content)
+                images = result.base64_images
+                if not images:
+                    images = [None] * len(text_contents)
 
-        if file_suffix in SUPPORTED_MEDIA_FILE_EXTENSIONS:
-            result: DocumentConverterResult = file_extractor.convert(file)
-            metadata={
-                "title": result.title,
-                "created_at": datetime.now().isoformat(),
-                "file_name": file_path_obj.name,
-            }
-            if result.metadata and result.metadata["image_base64"]:
-                metadata["image_origin"] = result.metadata["image_base64"]
+                for idx, (text, image) in enumerate(zip(text_contents, images)):
+                    text_metadata = metadata.copy()
+                    text_metadata["index"] = idx
+                    if image:
+                        text_metadata["images"] = image
+                    documents.append(
+                        Document(
+                            text=text,
+                            metadata=text_metadata,
+                        )
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to parse structured sheets in {file_path_obj.name}: {e}")
+                documents.append(
+                    Document(
+                        text=result.text_content,
+                        metadata=metadata,
+                    )
+                )
+        elif file_suffix in global_config.READER_CONFIG.supported_formats:
+
+            metadata["images"] = result.base64_images
                 
             documents.append(
                 Document(
@@ -108,36 +131,9 @@ def parse_multiple_files(
                     metadata=metadata,
                 )
             )
-        # elif (file_suffix in SUPPORTED_EXCEL_FILE_EXTENSIONS):
-        #     result: DocumentConverterResult = file_extractor.convert(file)
-        #     metadata={
-        #         "title": result.title,
-        #         "created_at": datetime.now().isoformat(),
-        #         "file_name": file_path_obj.name,
-        #     }
-        #     if result.metadata and result.metadata["image_base64"]:
-        #         metadata["image_origin"] = result.metadata["image_base64"]
-        #     try:
-        #         sheet_excel_texts: list = ast.literal_eval(result.text_content)
-        #         for idx, sheet_excel_text in enumerate(sheet_excel_texts):
-        #             sheet_metadata = metadata.copy()
-        #             sheet_metadata["sheet_index"] = idx
-        #             documents.append(
-        #                 Document(
-        #                     text=sheet_excel_text,
-        #                     metadata=sheet_metadata,
-        #                 )
-        #             )
-        #     except:
-        #         documents.append(
-        #             Document(
-        #                 text=result.text_content,
-        #                 metadata=metadata,
-        #             )
-        #         )
-        else:
-            results = file_extractor.load_data(file_path_obj)
-            documents.extend(results)
-
+    if global_config.READER_CONFIG.enable_agentic:
+        documents = worker.clustering_document_by_agentic_chunker(documents)
+    else:
+        documents = worker.clustering_document_by_block_token(documents)
     logger.info(f"Parse files successfully with {files_or_folder} split to {len(documents)} documents")
     return documents

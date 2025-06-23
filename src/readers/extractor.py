@@ -1,46 +1,26 @@
 from pathlib import Path
-from .kotaemon import (
-    JSONReader,
-    PandasCSVReader,
-    MarkdownReader,
-    IPYNBReader,
-    MboxReader,
-    XMLReader,
-    RTFReader,DocxReader,TxtReader,ExcelReader,HtmlReader,MhtmlReader,PDFReader,PDFThumbnailReader,PandasExcelReader)
 from .markitdown import MarkItDown
 from google import genai
-from src.config import global_config
+from openai import OpenAI
+from src.config import global_config, get_llm_config
 
 def get_extractor():
-    md = MarkItDown(enable_plugins=False)
-    ocr_md = MarkItDown(
-        llm_client=genai.Client(api_key=global_config.GEMINI_CONFIG.api_key),
-        llm_model=global_config.GEMINI_CONFIG.model_id.split("/")[1]
+    llm_config = get_llm_config(global_config.READER_CONFIG.llm_provider)
+    if llm_config.provider.value == "openai":
+        llm_client = OpenAI(api_key=llm_config.api_key,)
+    elif llm_config.provider.value == "google":
+        llm_client=genai.Client(api_key=llm_config.api_key)
+    md = MarkItDown(
+        llm_client=llm_client,
+        llm_model=llm_config.model_id,
+        enable_plugins=False
     )
-    return {
-        ".pdf": PDFThumbnailReader(),
-        ".docx": DocxReader(),
-        ".html": HtmlReader(),
-        ".csv": PandasCSVReader(pandas_config=dict(on_bad_lines="skip")),
-        ".xlsx": ExcelReader(),
-        ".xls":ExcelReader(),
-        ".json": JSONReader(),
-        ".txt": TxtReader(),
-        # ".pptx": PptxReader(),
-        ".md": MarkdownReader(),
-        ".ipynb": IPYNBReader(),
-        ".mbox": MboxReader(),
-        ".xml": XMLReader(),
-        ".rtf": RTFReader(),
-        ".msg": md,
-        ".wav":md,
-        ".mp3":md,
-        ".m4a":md,
-        ".mp4":md,
-        ".jpg":ocr_md,
-        ".jpeg":ocr_md,
-        ".png":ocr_md
-    }
+    map_extractor = {}
+    [
+        map_extractor.update({ext: md})
+        for ext in global_config.READER_CONFIG.supported_formats
+    ]
+    return map_extractor
     
 class FileExtractor:
     def __init__(self) -> None:

@@ -4,13 +4,15 @@ from .html_converter import HtmlConverter
 from .._base_converter import DocumentConverter, DocumentConverterResult
 from .._exceptions import MissingDependencyException, MISSING_DEPENDENCY_MESSAGE
 from .._stream_info import StreamInfo
-
+from io import BytesIO
+from ._custom_llm_caption import llm_caption
 # Try loading optional (but in this case, required) dependencies
 # Save reporting of any exceptions for later
 _xlsx_dependency_exc_info = None
 try:
     import pandas as pd
     import openpyxl
+    from openpyxl_image_loader import SheetImageLoader
 except ImportError:
     _xlsx_dependency_exc_info = sys.exc_info()
 
@@ -79,12 +81,22 @@ class XlsxConverter(DocumentConverter):
             ].with_traceback(  # type: ignore[union-attr]
                 _xlsx_dependency_exc_info[2]
             )
-
-        sheets = pd.read_excel(file_stream, sheet_name=None, engine="openpyxl")
-        md_content = []
-        for s in sheets:
-            s_content = f"## {s}\n"
-            html_content = sheets[s].to_html(index=False)
+        llm_client = kwargs.get("llm_client")
+        llm_model = kwargs.get("llm_model")
+        llm_prompt=kwargs.get("llm_prompt")
+        
+        # Tạo BytesIO cho openpyxl
+        file_bytes = file_stream.read()
+        
+        pxl_doc = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
+        sheets = pd.read_excel(BytesIO(file_bytes), sheet_name=None, engine="openpyxl")
+        
+        md_contents = []
+        images = []
+        for sheet_name in sheets:
+            sheet_images=[]
+            s_content = f"## {sheet_name}\n"
+            html_content = sheets[sheet_name].to_html(index=False)
             
             s_content += (
                 self._html_converter.convert_string(
@@ -92,10 +104,36 @@ class XlsxConverter(DocumentConverter):
                 ).markdown.strip()
                 + "\n\n"
             )
-            
-            md_content.append(s_content)
+            try:
+                sheet = pxl_doc[sheet_name]
+                print(sheet)
+                if hasattr(sheet, '_images') and sheet._images:
+                    for idx,img in enumerate(sheet._images):
+                        print(img)
+                        if img:
+                            cell = img.ref
+                            img_data = img._data()
+                            img_io = BytesIO(img_data)
+                            img_stream_info = StreamInfo(
+                                extension=".png",
+                                mimetype="image/png",
+                            )
+                            img_description , base64_image = llm_caption (
+                                file_stream=BytesIO(img_io.getvalue()),
+                                stream_info=img_stream_info,
+                                client=llm_client,
+                                model=llm_model,
+                                prompt=llm_prompt,
+                            )
+                            s_content += f"[Image at {idx}] with content: {img_description} \n\n"
+                            sheet_images.append(base64_image)
+            except Exception as e:
+                print(f"Error in process XLSX Converter: {e}")
+                pass
+            md_contents.append(s_content)
+            images.append(sheet_images if sheet_images else None)
 
-        return DocumentConverterResult(markdown=f"{md_content}")
+        return DocumentConverterResult(markdown=f"{md_contents}",base64_images=images)
 
 
 class XlsConverter(DocumentConverter):
