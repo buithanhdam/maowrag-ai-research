@@ -1,3 +1,4 @@
+# chunker.py - Updated version
 from copy import deepcopy
 from itertools import islice
 from typing import Any, Dict, List
@@ -52,17 +53,14 @@ class Chunker:
         if not string.strip():
             return 0
 
-        with self.lock:  # Use threading lock
+        with self.lock:
             try:
-                num_tokens = len(self.encoding.encode(string))
-                return num_tokens
+                return len(self.encoding.encode(string))
             except Exception as e:
-                print(
-                    f"Token encoding failed: {e}. Using fallback estimation."
-                )
-                # Fallback: Split by white space
+                print(f"Token encoding failed: {e}. Using fallback estimation.")
                 return len(string.split(" "))
-    def batch_iterable(self,iterable, batch_size):
+
+    def batch_iterable(self, iterable, batch_size):
         """Yield successive batch_size-sized chunks from iterable."""
         it = iter(iterable)
         while True:
@@ -70,6 +68,7 @@ class Chunker:
             if not batch:
                 break
             yield batch
+
     def _extract_code_block(self, text: str) -> str:
         """Extract content from json code blocks"""
         if not text:
@@ -84,120 +83,114 @@ class Chunker:
                 return text[start:end].strip()
         return text.strip()
 
-    def chunking_document_by_chunk_size(
-        self, documents: List[Document]
-    ) -> List[Document]:
+    def _merge_metadata(self, documents: List[Document]) -> Dict[str, Any]:
+        """Merge metadata from multiple documents, keeping file info and combining dynamic fields"""
+        if not documents:
+            return {}
+        
+        # Start with first document's metadata
+        base_metadata = deepcopy(documents[0].metadata) if documents[0].metadata else {}
+        
+        # Collect all original indexes and images
+        all_original_indexes = []
+        all_images = []
+        
+        for doc in documents:
+            if not doc.metadata:
+                continue
+                
+            # Collect original indexes
+            if "original_index" in doc.metadata:
+                all_original_indexes.append(doc.metadata["original_index"])
+            
+            # Collect images
+            if "images" in doc.metadata:
+                images = doc.metadata["images"]
+                if isinstance(images, list):
+                    all_images.extend(images)
+                elif images:  # Single image
+                    all_images.append(images)
+        
+        # Update merged metadata
+        if all_original_indexes:
+            base_metadata["original_indexes"] = sorted(set(all_original_indexes))
+        
+        if all_images:
+            base_metadata["images"] = all_images
+        
+        # Add chunking info
+        base_metadata.update({
+            "chunk_count": len(documents),
+            "token_count": sum(self.count_tokens_from_string(doc.text) for doc in documents),
+            "is_chunked": True
+        })
+        
+        return base_metadata
+
+    def chunking_document_by_chunk_size(self, documents: List[Document]) -> List[Document]:
         """Cluster documents by token block size"""
         if not documents:
             return []
 
         try:
-            chunk_size = global_config.READER_CONFIG.chunk_size
+            chunk_size = getattr(global_config.READER_CONFIG, 'chunk_size', 6000)
             if chunk_size <= 0:
-                print("Invalid chunk_size, using default 6000")
                 chunk_size = 6000
         except AttributeError:
-            print("chunk_size not found in config, using default 6000")
             chunk_size = 6000
 
         new_documents: List[Document] = []
-        merged_texts: List[str] = []
-        merged_indexes: List[int] = []
-        merged_token_count = 0
-        base_metadata: Dict = {}
+        current_batch: List[Document] = []
+        current_token_count = 0
 
-        for i, doc in enumerate(documents):
+        for doc in documents:
             if not doc or not doc.text.strip():
                 continue
 
-            # Create a safe copy of metadata
-            current_metadata = deepcopy(doc.metadata) if doc.metadata else {}
-            doc_token = self.count_tokens_from_string(doc.text)
+            doc_tokens = self.count_tokens_from_string(doc.text)
 
-            # If document is too large, keep it as is
-            if doc_token > chunk_size:
-                standalone_doc = deepcopy(doc)
-                standalone_doc.metadata = current_metadata
-                standalone_doc.metadata.update(
-                    {
-                        "token_count": doc_token,
-                        "indexes": [current_metadata.get("index", i)],
-                    }
-                )
-                new_documents.append(standalone_doc)
+            # If single document exceeds chunk size, keep it as is
+            if doc_tokens > chunk_size:
+                if current_batch:
+                    # Flush current batch first
+                    merged_metadata = self._merge_metadata(current_batch)
+                    combined_text = "\n\n".join(d.text.strip() for d in current_batch)
+                    new_documents.append(Document(text=combined_text, metadata=merged_metadata))
+                    current_batch = []
+                    current_token_count = 0
+                
+                # Add oversized document as-is
+                standalone_metadata = deepcopy(doc.metadata) if doc.metadata else {}
+                standalone_metadata.update({
+                    "token_count": doc_tokens,
+                    "is_chunked": False,
+                    "oversized": True
+                })
+                new_documents.append(Document(text=doc.text, metadata=standalone_metadata))
                 continue
 
-            # If adding this doc won't exceed limit
-            if merged_token_count + doc_token <= chunk_size:
-                merged_texts.append(doc.text)
-                merged_indexes.append(current_metadata.get("index", i))
-                merged_token_count += doc_token
-
-                # Update base metadata (use first doc's metadata as base)
-                if not base_metadata:
-                    base_metadata = deepcopy(current_metadata)
+            # Check if adding this document would exceed chunk size
+            if current_token_count + doc_tokens <= chunk_size:
+                current_batch.append(doc)
+                current_token_count += doc_tokens
             else:
-                # Flush current merged document
-                if merged_texts and merged_indexes:
-                    self._create_chunking_document_by_chunk_size(
-                        merged_texts,
-                        merged_indexes,
-                        merged_token_count,
-                        base_metadata,
-                        new_documents,
-                    )
+                # Flush current batch
+                if current_batch:
+                    merged_metadata = self._merge_metadata(current_batch)
+                    combined_text = "\n\n".join(d.text.strip() for d in current_batch)
+                    new_documents.append(Document(text=combined_text, metadata=merged_metadata))
+                
+                # Start new batch
+                current_batch = [doc]
+                current_token_count = doc_tokens
 
-                # Start new merge with current doc
-                merged_texts = [doc.text]
-                merged_indexes = [current_metadata.get("index", i)]
-                merged_token_count = doc_token
-                base_metadata = deepcopy(current_metadata)
-
-        # Handle remaining merged content
-        if merged_texts and merged_indexes:
-            self._create_chunking_document_by_chunk_size(
-                merged_texts,
-                merged_indexes,
-                merged_token_count,
-                base_metadata,
-                new_documents,
-            )
+        # Handle remaining batch
+        if current_batch:
+            merged_metadata = self._merge_metadata(current_batch)
+            combined_text = "\n\n".join(d.text.strip() for d in current_batch)
+            new_documents.append(Document(text=combined_text, metadata=merged_metadata))
 
         return new_documents
-
-    def _create_chunking_document_by_chunk_size(
-        self,
-        merged_texts: List[str],
-        merged_indexes: List[int],
-        token_count: int,
-        base_metadata: Dict,
-        new_documents: List[Document],
-    ) -> None:
-        """Helper method to create merged document"""
-        if not merged_texts:
-            return
-
-        # Use list join for efficiency
-        combined_text = "\n\n".join(
-            text.strip() for text in merged_texts if text.strip()
-        )
-
-        if not combined_text:
-            return
-
-        # Create metadata
-        final_metadata = deepcopy(base_metadata)
-        final_metadata.update(
-            {
-                "indexes": merged_indexes,
-                "token_count": token_count,
-                "merged_count": len(merged_texts),
-            }
-        )
-
-        # Create new document
-        new_doc = Document(text=combined_text, metadata=final_metadata)
-        new_documents.append(new_doc)
 
     def _validate_agentic_chunking_result(self, doc_result: Any, num_docs: int) -> bool:
         """Validate the chunking result structure"""
@@ -217,66 +210,10 @@ class Chunker:
                     return False  # Duplicate index
                 all_indexes.add(idx)
 
-        # Check if all documents are covered
         return len(all_indexes) == num_docs
 
-    def _create_agentic_chunking_documents(
-        self, documents: List[Document], clusters: List[Dict]
-    ) -> List[Document]:
-        """Create new Document objects from chunking results"""
-        clustered_docs = []
-
-        for cluster in clusters:
-            indexes = cluster.get("indexes", [])
-            if not indexes:
-                continue
-
-            # Collect texts and metadata
-            texts = []
-            images=[]
-            base_metadata = {}
-
-            for idx in indexes:
-                if 0 <= idx < len(documents):
-                    doc:Document = documents[idx]
-                    if doc and doc.text.strip():
-                        texts.append(doc.text.strip())
-                        # Use first doc's metadata as base
-                        if (
-                            not base_metadata
-                            and hasattr(doc, "metadata")
-                            and doc.metadata
-                        ):
-                            base_metadata = deepcopy(doc.metadata)
-                        images.extend(doc.metadata.get('images', []))
-
-            if not texts:
-                continue
-
-            # Create combined text
-            combined_text = "\n\n".join(texts)
-
-            # Create final metadata
-            final_metadata = deepcopy(base_metadata)
-            final_metadata.update(
-                {
-                    "indexes": indexes,
-                    "images": images,
-                    "token_count": self.count_tokens_from_string(combined_text),
-                    "clustered_count": len(texts),
-                }
-            )
-
-            # Create new document
-            new_doc = Document(text=combined_text, metadata=final_metadata)
-            clustered_docs.append(new_doc)
-
-        return clustered_docs
-
-    def chunking_document_by_agentic(
-        self, documents: List[Document]
-    ) -> List[Document]:
-        """chunking documents by agentic chunking"""
+    def chunking_document_by_agentic(self, documents: List[Document]) -> List[Document]:
+        """Chunking documents by agentic chunking"""
         if not documents:
             return []
 
@@ -299,6 +236,7 @@ class Chunker:
             response = self.llm.chat(
                 query=json.dumps(input_documents, indent=4, ensure_ascii=False)
             )
+            
             if not response or not response.strip():
                 print("LLM returned empty response")
                 return valid_docs
@@ -317,8 +255,24 @@ class Chunker:
                 return valid_docs
 
             # Create clustered documents
-            clustered = self._create_agentic_chunking_documents(valid_docs, chunking_result)
-            return clustered if clustered else valid_docs
+            clustered_docs = []
+            for cluster in chunking_result:
+                indexes = cluster.get("indexes", [])
+                if not indexes:
+                    continue
+
+                # Get documents for this cluster
+                cluster_docs = [valid_docs[idx] for idx in indexes if 0 <= idx < len(valid_docs)]
+                if not cluster_docs:
+                    continue
+
+                # Merge documents in cluster
+                merged_metadata = self._merge_metadata(cluster_docs)
+                combined_text = "\n\n".join(doc.text.strip() for doc in cluster_docs)
+                
+                clustered_docs.append(Document(text=combined_text, metadata=merged_metadata))
+
+            return clustered_docs if clustered_docs else valid_docs
 
         except json.JSONDecodeError as e:
             print(f"Failed to parse LLM JSON response: {e}")

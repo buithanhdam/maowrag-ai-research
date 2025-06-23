@@ -1,4 +1,3 @@
-# This file contains utility functions for the readers module.
 from pathlib import Path
 from typing import Any
 from dotenv import load_dotenv
@@ -14,40 +13,21 @@ load_dotenv()
 
 
 def check_valid_extenstion(file_path: str | Path) -> bool:
-    """
-    Check if the file extension is supported
-
-    Args:
-        file_path (str | Path): File path to check
-
-    Returns:
-        bool: True if the file extension is supported, False otherwise.
-    """
+    """Check if the file extension is supported"""
     return Path(file_path).suffix in global_config.READER_CONFIG.supported_formats
 
 
 def get_files_from_folder_or_file_paths(files_or_folders: list[str]) -> list[str]:
-    """
-    Get all files from the list of file paths or folders
-
-    Args:
-        files_or_folders (list[str]): List of file paths or folders
-
-    Returns:
-        list[str]: List of valid file paths.
-    """
+    """Get all files from the list of file paths or folders"""
     files = []
 
     for file_or_folder in files_or_folders:
         if Path(file_or_folder).is_dir():
-            files.extend(
-                [
-                    str(file_path.resolve())
-                    for file_path in Path(file_or_folder).rglob("*")
-                    if check_valid_extenstion(file_path)
-                ]
-            )
-
+            files.extend([
+                str(file_path.resolve())
+                for file_path in Path(file_or_folder).rglob("*")
+                if check_valid_extenstion(file_path)
+            ])
         else:
             if check_valid_extenstion(file_or_folder):
                 files.append(str(Path(file_or_folder).resolve()))
@@ -56,19 +36,46 @@ def get_files_from_folder_or_file_paths(files_or_folders: list[str]) -> list[str
 
     return files
 
+
+def create_base_metadata(result: DocumentConverterResult, file_path: Path) -> dict:
+    """Create base metadata for documents"""
+    return {
+        "title": result.title,
+        "created_at": datetime.now().isoformat(),
+        "file_name": file_path.name,
+        "file_path": str(file_path),
+        "original_index": 0  # Will be updated for multi-part files
+    }
+
+
+def create_document_from_parts(text_parts: list, images: list, base_metadata: dict) -> list[Document]:
+    """Create documents from text parts and images"""
+    documents = []
+    
+    # Ensure images list matches text_parts length
+    if not images:
+        images = [None] * len(text_parts)
+    elif len(images) < len(text_parts):
+        images.extend([None] * (len(text_parts) - len(images)))
+    
+    for idx, (text, image) in enumerate(zip(text_parts, images)):
+        metadata = base_metadata.copy()
+        metadata["original_index"] = idx
+        
+        if image:
+            metadata["images"] = [image]  # Consistent list format
+        
+        documents.append(Document(text=text, metadata=metadata))
+    
+    return documents
+
+
 def parse_multiple_files(
-    files_or_folder: list[str] | str, extractor: dict[str, Any],
+    files_or_folder: list[str] | str, 
+    extractor: dict[str, Any],
     show_progress: bool = True
 ) -> list[Document]:
-    """
-    Read the content of multiple files.
-
-    Args:
-        files_or_folder (list[str] | str): List of file paths or folder paths containing files.
-        extractor (dict[str, Any]): Extractor to extract content from files.
-    Returns:
-        list[Document]: List of documents from all files.
-    """
+    """Read the content of multiple files."""
     logger = global_config.GET_LOGGER(__name__)
     assert extractor, "Extractor is required."
 
@@ -84,56 +91,44 @@ def parse_multiple_files(
 
     documents: list[Document] = []
     worker = Chunker()
+    
     files_to_process = tqdm(valid_files, desc="Starting parse files", unit="file") if show_progress else valid_files
+    
     for file in files_to_process:
         file_path_obj = Path(file)
         file_suffix = file_path_obj.suffix.lower()
         file_extractor = extractor[file_suffix]
         result: DocumentConverterResult = file_extractor.convert(file)
-        metadata={
-            "title": result.title,
-            "created_at": datetime.now().isoformat(),
-            "file_name": file_path_obj.name,
-        }
+        
+        base_metadata = create_base_metadata(result, file_path_obj)
+        
+        # Handle structured files (Excel, PDF with multiple parts)
         if file_suffix in ['.xlsx', '.xls', '.pdf']:
             try:
                 text_contents: list = ast.literal_eval(result.text_content)
-                images = result.base64_images
-                if not images:
-                    images = [None] * len(text_contents)
-
-                for idx, (text, image) in enumerate(zip(text_contents, images)):
-                    text_metadata = metadata.copy()
-                    text_metadata["index"] = idx
-                    if image:
-                        text_metadata["images"] = image
-                    documents.append(
-                        Document(
-                            text=text,
-                            metadata=text_metadata,
-                        )
-                    )
+                documents.extend(create_document_from_parts(
+                    text_contents, 
+                    result.base64_images or [], 
+                    base_metadata
+                ))
             except Exception as e:
-                logger.warning(f"Failed to parse structured sheets in {file_path_obj.name}: {e}")
-                documents.append(
-                    Document(
-                        text=result.text_content,
-                        metadata=metadata,
-                    )
-                )
-        elif file_suffix in global_config.READER_CONFIG.supported_formats:
+                logger.warning(f"Failed to parse structured content in {file_path_obj.name}: {e}")
+                # Fallback to single document
+                if result.base64_images:
+                    base_metadata["images"] = result.base64_images
+                documents.append(Document(text=result.text_content, metadata=base_metadata))
+        
+        # Handle regular files
+        else:
+            if result.base64_images:
+                base_metadata["images"] = result.base64_images
+            documents.append(Document(text=result.text_content, metadata=base_metadata))
 
-            metadata["images"] = result.base64_images
-                
-            documents.append(
-                Document(
-                    text=result.text_content,
-                    metadata=metadata,
-                )
-            )
+    # Apply chunking strategy
     if global_config.READER_CONFIG.enable_agentic:
         documents = worker.chunking_document_by_agentic(documents)
     else:
         documents = worker.chunking_document_by_chunk_size(documents)
-    logger.info(f"Parse files successfully with {files_or_folder} split to {len(documents)} documents")
+    
+    logger.info(f"Parsed {len(valid_files)} files into {len(documents)} chunks")
     return documents
