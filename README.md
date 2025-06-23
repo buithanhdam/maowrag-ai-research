@@ -1,4 +1,4 @@
-# Research-Ai-LLM-Everyday
+# Maowrag AI research and practical application
 
 ## 🧠 Introduction
 
@@ -56,8 +56,8 @@ New experiments, integrations, and agent workflows will be continuously added to
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/buithanhdam/research-ai-llm-everyday.git
-cd research-ai-llm-everyday
+git clone https://github.com/buithanhdam/maowrag-ai-research.git
+cd maowrag-ai-research
 ```
 
 ### 2. (Optional) Create a virtual environment
