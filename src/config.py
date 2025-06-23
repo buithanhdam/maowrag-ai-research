@@ -8,10 +8,19 @@ import os
 from src.prompt import (LLM_SYSTEM_PROMPT)
 from src.constants import (
     SUPPORTED_MEDIA_FILE_EXTENSIONS,SUPPORTED_NORMAL_FILE_EXTENSIONS,
-    LLMProviderType
+    LLMProviderType,LLMModelID, LLM_MODEL_MAX_OUTPUT_TOKEN, LLM_MODEL_MAX_CONTEXT_WINDOW
 )
 
-     
+class LLMConfig(BaseModel):
+    api_key: str
+    provider: LLMProviderType
+    model_id: str
+    temperature: float = 0.7
+    max_tokens: int = 2048
+    context_window: int = 128_000
+    timeout: float = 100
+    system_prompt: str = "You are a helpful assistant."
+   
 class LLMConfig(BaseModel):
     api_key: str
     provider: LLMProviderType
@@ -27,6 +36,7 @@ class RAGConfig(BaseModel):
     default_collection: str = "documents"
     max_results: int = 5
     similarity_threshold: float = 0.7
+    
 class ReaderConfig(BaseModel):
     num_threads: int = 3
     image_resolution_scale: float = 2.0
@@ -47,22 +57,26 @@ class QdrantPayload(BaseModel):
     metadata: Dict[str, Any]
     
 class Config:
-    OPENAI_CONFIG = LLMConfig(
-        api_key=os.environ.get('OPENAI_API_KEY',""),
+    # LLM Config
+    OPENAI_CONFIG: LLMConfig = LLMConfig(
+        api_key=os.environ.get("OPENAI_BASE_API_KEY", ""),
         provider=LLMProviderType.OPENAI,
-        model_id="gpt-3.5-turbo",
+        model_id=LLMModelID.GPT_4_1_MINI.value,
         temperature=0.7,
-        max_tokens= 2048,
-        system_prompt=LLM_SYSTEM_PROMPT
+        max_tokens=LLM_MODEL_MAX_OUTPUT_TOKEN.get(LLMModelID.GPT_4_1_MINI),
+        context_window=LLM_MODEL_MAX_CONTEXT_WINDOW.get(LLMModelID.GPT_4_1_MINI),
+        system_prompt="You are a helpful assistant.",
+        timeout=100,
     )
-
-    GEMINI_CONFIG = LLMConfig(
-        api_key=os.environ.get('GOOGLE_API_KEY',""),
+    GEMINI_CONFIG: LLMConfig = LLMConfig(
+        api_key=os.environ.get("GOOGLE_BASE_API_KEY", ""),
         provider=LLMProviderType.GOOGLE,
-        model_id="models/gemini-2.0-flash",
-        temperature=0.8,
-        max_tokens = 2048,
-        system_prompt=LLM_SYSTEM_PROMPT
+        model_id=LLMModelID.GEMINI_2_0_FLASH.value,
+        temperature=0.7,
+        max_tokens=LLM_MODEL_MAX_OUTPUT_TOKEN.get(LLMModelID.GEMINI_2_0_FLASH),
+        context_window=LLM_MODEL_MAX_CONTEXT_WINDOW.get(LLMModelID.GEMINI_2_0_FLASH),
+        system_prompt="You are a helpful assistant.",
+        timeout=100,
     )
     READER_CONFIG: ReaderConfig = ReaderConfig()
     QDRANT_URL = os.environ.get("QDRANT_URL")
