@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 from llama_index.core.tools import FunctionTool
 from llama_index.core.output_parsers import PydanticOutputParser
 from llama_index.core.program import LLMTextCompletionProgram
-
+from difflib import get_close_matches
 from src.logger import get_formatted_logger
 from .utils import (
     clean_json_response,
@@ -226,13 +226,19 @@ class BaseAgent(ABC):
         """Execute a tool with better error handling and context-awareness"""
         if not requires_tool or not tool_name:
             return None
-        tool = self.tools_dict.get(tool_name)
-        if not tool:
+        tool_keys = self.tools_dict.keys()
+        if tool_name not in tool_keys:
+            close = get_close_matches(tool_name, tool_keys, n=1, cutoff=0.8)
             if verbose:
                 self._log_warning(
                     f"Attempted to execute non-existent tool: {tool_name}"
                 )
-            return None
+            if not close:
+                return None
+            if verbose:
+                self._log_warning(f"Fuzzy matched '{tool_name}' → '{close[0]}'")
+            tool_name = close[0]
+        tool = self.tools_dict.get(tool_name)
         result = None
         try:
             params = await self._argument_parser(task, tool_name, tool, verbose)
