@@ -8,7 +8,7 @@ import ast
 from tqdm import tqdm
 from src.config import global_config
 from .markitdown import DocumentConverterResult
-from .tokenizer import ReaderWorker
+from .chunker import Chunker
 
 load_dotenv()
 
@@ -83,7 +83,7 @@ def parse_multiple_files(
     logger.info(f"Valid files: {valid_files}")
 
     documents: list[Document] = []
-    worker = ReaderWorker()
+    worker = Chunker()
     files_to_process = tqdm(valid_files, desc="Starting parse files", unit="file") if show_progress else valid_files
     for file in files_to_process:
         file_path_obj = Path(file)
@@ -132,8 +132,8 @@ def parse_multiple_files(
                 )
             )
     if global_config.READER_CONFIG.enable_agentic:
-        documents = worker.clustering_document_by_agentic_chunker(documents)
+        documents = worker.chunking_document_by_agentic(documents)
     else:
-        documents = worker.clustering_document_by_block_token(documents)
+        documents = worker.chunking_document_by_chunk_size(documents)
     logger.info(f"Parse files successfully with {files_or_folder} split to {len(documents)} documents")
     return documents

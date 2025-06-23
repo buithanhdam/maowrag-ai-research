@@ -1,4 +1,5 @@
 from copy import deepcopy
+from itertools import islice
 from typing import Any, Dict, List
 import tiktoken
 import threading
@@ -7,7 +8,7 @@ import json
 from src.config import global_config
 from src.llm import BaseLLM
 
-SEMANTIC_CLUSTERING_SYSTEM_PROMPT = """
+SEMANTIC_CHUNKING_SYSTEM_PROMPT = """
 ## You are an intelligent document clustering assistant.
 Your primary goal is to group related document chunks based on their semantic meaning and context, while also considering their combined token size for optimal processing.
 ### When clustering, prioritize the following:
@@ -36,14 +37,14 @@ Example Output:
 Ensure that every original document index is present in exactly one cluster in your output. Do not include any additional text or explanations outside the JSON.
 """
 
-class ReaderWorker:
+class Chunker:
     def __init__(self, encoding_name: str = "cl100k_base"):
         self.encoding_name = encoding_name
         self.encoding = tiktoken.get_encoding(encoding_name)
         self.lock = threading.Lock()
         self.llm = BaseLLM(
             provider=global_config.READER_CONFIG.llm_provider,
-            system_prompt=SEMANTIC_CLUSTERING_SYSTEM_PROMPT,
+            system_prompt=SEMANTIC_CHUNKING_SYSTEM_PROMPT,
         )
 
     def count_tokens_from_string(self, string: str) -> int:
@@ -61,7 +62,14 @@ class ReaderWorker:
                 )
                 # Fallback: Split by white space
                 return len(string.split(" "))
-
+    def batch_iterable(self,iterable, batch_size):
+        """Yield successive batch_size-sized chunks from iterable."""
+        it = iter(iterable)
+        while True:
+            batch = list(islice(it, batch_size))
+            if not batch:
+                break
+            yield batch
     def _extract_code_block(self, text: str) -> str:
         """Extract content from json code blocks"""
         if not text:
@@ -76,7 +84,7 @@ class ReaderWorker:
                 return text[start:end].strip()
         return text.strip()
 
-    def clustering_document_by_block_token(
+    def chunking_document_by_chunk_size(
         self, documents: List[Document]
     ) -> List[Document]:
         """Cluster documents by token block size"""
@@ -84,13 +92,13 @@ class ReaderWorker:
             return []
 
         try:
-            block_token = global_config.READER_CONFIG.chunk_size
-            if block_token <= 0:
+            chunk_size = global_config.READER_CONFIG.chunk_size
+            if chunk_size <= 0:
                 print("Invalid chunk_size, using default 6000")
-                block_token = 6000
+                chunk_size = 6000
         except AttributeError:
             print("chunk_size not found in config, using default 6000")
-            block_token = 6000
+            chunk_size = 6000
 
         new_documents: List[Document] = []
         merged_texts: List[str] = []
@@ -107,7 +115,7 @@ class ReaderWorker:
             doc_token = self.count_tokens_from_string(doc.text)
 
             # If document is too large, keep it as is
-            if doc_token > block_token:
+            if doc_token > chunk_size:
                 standalone_doc = deepcopy(doc)
                 standalone_doc.metadata = current_metadata
                 standalone_doc.metadata.update(
@@ -120,7 +128,7 @@ class ReaderWorker:
                 continue
 
             # If adding this doc won't exceed limit
-            if merged_token_count + doc_token <= block_token:
+            if merged_token_count + doc_token <= chunk_size:
                 merged_texts.append(doc.text)
                 merged_indexes.append(current_metadata.get("index", i))
                 merged_token_count += doc_token
@@ -131,7 +139,7 @@ class ReaderWorker:
             else:
                 # Flush current merged document
                 if merged_texts and merged_indexes:
-                    self._create_block_clustering_document(
+                    self._create_chunking_document_by_chunk_size(
                         merged_texts,
                         merged_indexes,
                         merged_token_count,
@@ -147,7 +155,7 @@ class ReaderWorker:
 
         # Handle remaining merged content
         if merged_texts and merged_indexes:
-            self._create_block_clustering_document(
+            self._create_chunking_document_by_chunk_size(
                 merged_texts,
                 merged_indexes,
                 merged_token_count,
@@ -157,7 +165,7 @@ class ReaderWorker:
 
         return new_documents
 
-    def _create_block_clustering_document(
+    def _create_chunking_document_by_chunk_size(
         self,
         merged_texts: List[str],
         merged_indexes: List[int],
@@ -191,8 +199,8 @@ class ReaderWorker:
         new_doc = Document(text=combined_text, metadata=final_metadata)
         new_documents.append(new_doc)
 
-    def _validate_agentic_clustering_result(self, doc_result: Any, num_docs: int) -> bool:
-        """Validate the clustering result structure"""
+    def _validate_agentic_chunking_result(self, doc_result: Any, num_docs: int) -> bool:
+        """Validate the chunking result structure"""
         if not isinstance(doc_result, list) or not doc_result:
             return False
 
@@ -212,10 +220,10 @@ class ReaderWorker:
         # Check if all documents are covered
         return len(all_indexes) == num_docs
 
-    def _create_agentic_clustered_documents(
+    def _create_agentic_chunking_documents(
         self, documents: List[Document], clusters: List[Dict]
     ) -> List[Document]:
-        """Create new Document objects from clustering results"""
+        """Create new Document objects from chunking results"""
         clustered_docs = []
 
         for cluster in clusters:
@@ -265,10 +273,10 @@ class ReaderWorker:
 
         return clustered_docs
 
-    def clustering_document_by_agentic_chunker(
+    def chunking_document_by_agentic(
         self, documents: List[Document]
     ) -> List[Document]:
-        """Clustering documents by agentic chunking"""
+        """chunking documents by agentic chunking"""
         if not documents:
             return []
 
@@ -301,20 +309,20 @@ class ReaderWorker:
                 print("No valid JSON block found in LLM response")
                 return valid_docs
 
-            clustering_result = json.loads(extracted_response)
+            chunking_result = json.loads(extracted_response)
 
             # Validate result
-            if not self._validate_agentic_clustering_result(clustering_result, len(valid_docs)):
-                print("Invalid clustering result from LLM")
+            if not self._validate_agentic_chunking_result(chunking_result, len(valid_docs)):
+                print("Invalid chunking result from LLM")
                 return valid_docs
 
             # Create clustered documents
-            clustered = self._create_agentic_clustered_documents(valid_docs, clustering_result)
+            clustered = self._create_agentic_chunking_documents(valid_docs, chunking_result)
             return clustered if clustered else valid_docs
 
         except json.JSONDecodeError as e:
             print(f"Failed to parse LLM JSON response: {e}")
             return valid_docs
         except Exception as e:
-            print(f"Error in document clustering: {e}")
+            print(f"Error in document chunking: {e}")
             return valid_docs

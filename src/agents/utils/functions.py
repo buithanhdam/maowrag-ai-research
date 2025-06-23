@@ -1,7 +1,5 @@
-from itertools import islice
 import re
 from typing import Any, List
-import tiktoken
 from llama_index.core.node_parser import (
     SentenceSplitter,
     SemanticSplitterNodeParser,
@@ -29,24 +27,7 @@ def clean_json_response(response: str) -> str:
     response = response.replace(",]", "]").replace(",}", "}")
     
     return response
-    
-def batch_iterable(iterable, batch_size):
-    """Yield successive batch_size-sized chunks from iterable."""
-    it = iter(iterable)
-    while True:
-        batch = list(islice(it, batch_size))
-        if not batch:
-            break
-        yield batch
-def count_tokens_from_string(string: str, encoding_name: str = "cl100k_base") -> int:
-    """Returns the number of tokens in a text string."""
-    try:
-        encoding = tiktoken.get_encoding(encoding_name)
-        num_tokens = len(encoding.encode(string))
-        return num_tokens
-    except Exception as e:
-        # Fallback: rough estimate of 4 characters per token
-        return len(string)
+
 def text_splitter(
     text: Any,
     chunk_size : int =DEFAULT_CHUNK_SIZE,

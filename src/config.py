@@ -46,6 +46,7 @@ class ReaderConfig(BaseModel):
     max_pages: int = 100
     max_file_size: int = 20971520  # 20MB
     chunk_size: int = 6000
+    chunk_overlap: int = 64
     supported_formats: list[str] = (
         SUPPORTED_MEDIA_FILE_EXTENSIONS + SUPPORTED_NORMAL_FILE_EXTENSIONS
     )     
