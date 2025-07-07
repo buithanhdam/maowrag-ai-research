@@ -1,4 +1,4 @@
-# Maowrag AI research and practical application
+# Maowrag AI built with RAG Techniques, Web searches, VectorDB, Tools, Agents, Multi-agent workflows and practical application
 
 ## 🧠 Introduction
 
